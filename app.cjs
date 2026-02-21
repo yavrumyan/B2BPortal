@@ -2,9 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 
-// Load env vars from .env files. Checks two locations:
-//   1. /home/<user>/.b2b_env  — outside deployment dir, survives auto-deploys
-//   2. <app_dir>/.env         — local fallback (wiped on each auto-deploy)
+// Load env vars from a file, skipping keys already set in process.env
 function loadEnvFile(filePath) {
   try {
     const envFile = fs.readFileSync(filePath, 'utf8');
@@ -20,9 +18,13 @@ function loadEnvFile(filePath) {
   } catch (_) {}
 }
 
-// Home dir env (persists across deployments)
-loadEnvFile(path.join(require('os').homedir(), '.b2b_env'));
-// App dir env (convenience fallback)
+// __dirname = /home/u217740454/domains/b2b.chip.am/public_html
+// 3 levels up = /home/u217740454  (reliable, no os.homedir() needed)
+const homeDir = path.resolve(__dirname, '../../..');
+
+// Home dir env (persists across auto-deploys, never wiped by Hostinger)
+loadEnvFile(path.join(homeDir, '.b2b_env'));
+// App dir env (local fallback, wiped on each auto-deploy)
 loadEnvFile(path.join(__dirname, '.env'));
 
 // Dynamic import loads the ESM app in the SAME process so lsnode.js
