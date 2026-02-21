@@ -1,0 +1,5 @@
+PassengerAppRoot /home/u217740454/domains/b2b.chip.am/public_html
+PassengerAppType node
+PassengerNodejs /opt/alt/alt-nodejs20/root/bin/node
+PassengerStartupFile app.cjs
+PassengerBaseURI /
