@@ -1,42 +1,39 @@
-import { spawn } from 'child_process';
 import fs from 'fs';
-import http from 'http';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-// Load .env file if present (Hostinger hPanel env vars aren't passed to subprocesses)
-try {
-  const envFile = fs.readFileSync('./.env', 'utf8');
-  for (const line of envFile.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const idx = trimmed.indexOf('=');
-    if (idx === -1) continue;
-    const key = trimmed.slice(0, idx).trim();
-    const val = trimmed.slice(idx + 1).trim().replace(/^["']|["']$/g, '');
-    if (key && !(key in process.env)) process.env[key] = val;
-  }
-} catch (_) { /* no .env file, continue */ }
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-const logFile = fs.createWriteStream('./crash-report.txt', { flags: 'a' });
-logFile.write(`\n\n=== NEW DEPLOYMENT AT ${new Date().toISOString()} ===\n`);
+// Load env vars from a file, skipping keys already in process.env
+function loadEnvFile(filePath) {
+  try {
+    const envFile = fs.readFileSync(filePath, 'utf8');
+    for (const line of envFile.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const idx = trimmed.indexOf('=');
+      if (idx === -1) continue;
+      const key = trimmed.slice(0, idx).trim();
+      const val = trimmed.slice(idx + 1).trim().replace(/^["']|["']$/g, '');
+      if (key && !(key in process.env)) process.env[key] = val;
+    }
+  } catch (_) {}
+}
 
-// Spawn your actual application
-const NODE = process.execPath; // full path to the current node binary
-const child = spawn(NODE, ['dist/index.js'], {
-  env: process.env,
-  stdio: 'pipe' 
-});
+// __dirname = /home/u217740454/domains/b2b.chip.am/public_html
+// 3 levels up  = /home/u217740454
+const homeDir = path.resolve(__dirname, '../../..');
 
-// Capture all terminal output (stdout and stderr) and save it to the file
-child.stdout.on('data', (data) => logFile.write(data));
-child.stderr.on('data', (data) => logFile.write(data));
+// Load from home dir first (persists across auto-deploys)
+loadEnvFile(path.join(homeDir, '.b2b_env'));
+// Then app dir (local fallback, wiped on each auto-deploy)
+loadEnvFile(path.join(__dirname, '.env'));
 
-child.on('exit', (code) => {
-  logFile.write(`\n=== APP CRASHED WITH EXIT CODE ${code} ===\n`);
-  
-  // Start a dummy server to keep the container alive and replace the generic 503 error
-  const port = parseInt(process.env.PORT || "5000", 10);
-  http.createServer((req, res) => {
-    res.writeHead(500, { 'Content-Type': 'text/plain' });
-    res.end('The Node application crashed. Please check crash-report.txt in your File Manager.');
-  }).listen(port, "0.0.0.0");
+// IMPORTANT: Use dynamic import() in the SAME PROCESS — NOT subprocess spawn.
+// lsnode.js patches http.listen() only in the parent process. A child subprocess
+// would not inherit these patches, causing Passenger to never see a ready server.
+import(path.join(__dirname, 'dist', 'index.js')).catch(err => {
+  console.error('[STARTUP] Fatal error loading app:', err);
+  process.exit(1);
 });
