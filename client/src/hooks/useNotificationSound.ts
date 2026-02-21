@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import notificationSoundPath from '@assets/new-notification-011-364050_1764948162939.mp3';
+import notificationSoundPath from '@assets/notification.mp3';
 
 export function useNotificationSound() {
   const audioRef = useRef<HTMLAudioElement | null>(null);

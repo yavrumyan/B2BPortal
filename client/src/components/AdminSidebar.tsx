@@ -1,7 +1,7 @@
 import { Package, Users, ShoppingBag, Mail, Settings, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import logoPath from "@assets/LOG_1763806953898.png";
+import logoPath from "@assets/logo.png";
 
 interface AdminSidebarProps {
   activeSection?: "products" | "registrations" | "orders" | "inquiries" | "settings";

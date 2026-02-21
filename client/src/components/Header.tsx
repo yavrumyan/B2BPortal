@@ -6,7 +6,7 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import logoPath from "@assets/LOG_1763806953898.png";
+import logoPath from "@assets/logo.png";
 
 interface HeaderProps {
   cartItemCount?: number;

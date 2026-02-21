@@ -1,7 +1,7 @@
 
 import { Package, ShoppingBag, User, MessageCircle, Mail, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import logoPath from "@assets/LOG_1763806953898.png";
+import logoPath from "@assets/logo.png";
 
 interface CustomerSidebarProps {
   activeSection?: "products" | "orders" | "inquiries" | "profile";
