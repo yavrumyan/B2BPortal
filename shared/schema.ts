@@ -104,8 +104,8 @@ export const orders = pgTable("orders", {
   deliveryStatus: varchar("delivery_status", { length: 20 }).default("processing").notNull(), // processing, confirmed, transit, delivered
   deliveryDate: timestamp("delivery_date"),
   items: jsonb("items").notNull(), // array of { productId, name, price, quantity }
-  seen: boolean().default(true).notNull(), // whether customer has viewed this order after last status update
-  adminSeen: boolean().default(false).notNull(), // whether admin has viewed this order after creation
+  seen: boolean("seen").default(true).notNull(), // whether customer has viewed this order after last status update
+  adminSeen: boolean("admin_seen").default(false).notNull(), // whether admin has viewed this order after creation
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

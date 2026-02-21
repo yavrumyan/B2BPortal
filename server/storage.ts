@@ -170,17 +170,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateCustomerStatusByDebt(customerId: string): Promise<Customer> {
-    // Get customer stats to calculate status
+    const customer = await this.getCustomerById(customerId);
+
+    if (!customer) {
+      return { id: customerId } as Customer;
+    }
+
+    // Never auto-change status for pending, rejected, or admin accounts
+    // Only recalculate debt-based status for approved/limited/paused customers
+    if (customer.status === 'pending' || customer.status === 'rejected' || customer.role === 'admin') {
+      return customer;
+    }
+
+    // Get customer stats to calculate status based on overdue payments
     const stats = await this.getCustomerOrderStats(customerId);
-    
-    let newStatus = "approved"; // Default status for approved customers
-    
-    // If customer has orders, calculate status based on overdue payments
+
+    let newStatus = "approved"; // Default for active customers with no overdue debt
+
     if (stats.totalOrderAmount > 0) {
       const overduePercentage = stats.overduePayments / stats.totalOrderAmount;
-      const fiftyPercentThreshold = 0.5;
-      
-      if (overduePercentage >= fiftyPercentThreshold) {
+
+      if (overduePercentage >= 0.5) {
         // Overdue >= 50% of total orders → Paused
         newStatus = "paused";
       } else if (stats.overduePayments > 0) {
@@ -188,14 +198,13 @@ export class DatabaseStorage implements IStorage {
         newStatus = "limited";
       }
     }
-    
-    // Update customer status if different from current
-    const customer = await this.getCustomerById(customerId);
-    if (customer && customer.status !== newStatus) {
+
+    // Update customer status only if it changed
+    if (customer.status !== newStatus) {
       return await this.updateCustomer(customerId, { status: newStatus as any });
     }
-    
-    return customer || { id: customerId } as Customer;
+
+    return customer;
   }
 
 

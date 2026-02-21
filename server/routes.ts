@@ -111,6 +111,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
+      // Block login for pending and rejected accounts
+      if (customer.status === 'pending') {
+        return res.status(403).json({ message: "Ваша заявка ожидает одобрения администратора" });
+      }
+      if (customer.status === 'rejected') {
+        return res.status(403).json({ message: "Ваша заявка была отклонена" });
+      }
+
       // Regenerate session to prevent session fixation attacks
       const oldSessionData = req.session;
       req.session.regenerate((err) => {
@@ -377,6 +385,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/orders", isAuthenticated, async (req, res) => {
     try {
+      // Check customer account status before allowing order placement
+      const orderingCustomer = await storage.getCustomerById(req.session.customerId!);
+      if (!orderingCustomer) {
+        return res.status(404).json({ message: "Customer not found" });
+      }
+      if (orderingCustomer.status === 'pending') {
+        return res.status(403).json({ message: "Ваша заявка ожидает одобрения администратора" });
+      }
+      if (orderingCustomer.status === 'rejected') {
+        return res.status(403).json({ message: "Ваша заявка была отклонена" });
+      }
+      if (orderingCustomer.status === 'paused') {
+        return res.status(403).json({ message: "Ваш аккаунт временно приостановлен из-за задолженности" });
+      }
+
       // Fetch product names for each item and validate stock availability
       const itemsWithNames = await Promise.all(
         req.body.items.map(async (item: { productId: string; quantity: number; price: number; name?: string }) => {
