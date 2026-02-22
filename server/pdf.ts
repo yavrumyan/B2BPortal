@@ -86,16 +86,13 @@ function drawFooter(doc: InstanceType<typeof PDFDocument>) {
   const bottom = doc.page.height - 40;
   doc.moveTo(40, bottom - 10).lineTo(doc.page.width - 40, bottom - 10)
     .strokeColor('#e5e7eb').lineWidth(1).stroke();
-  // lineBreak: false prevents cursor from advancing past the page margin
-  // and triggering an unwanted blank second page
-  const dateStr = `Сформировано: ${new Date().toLocaleDateString('ru-RU')} | `;
-  doc.font('Regular').fontSize(8);
-  const textW = doc.widthOfString(dateStr + 'b2b.chip.am');
-  const textX = (doc.page.width - textW) / 2;
-  doc.fillColor(MED_GRAY)
-    .text(dateStr, textX, bottom - 5, { continued: true, lineBreak: false });
-  doc.fillColor(BRAND_COLOR)
-    .text('b2b.chip.am', { link: 'https://b2b.chip.am', underline: true, lineBreak: false });
+  // lineBreak: false prevents cursor advancing past bottom margin → no blank 2nd page
+  doc.fillColor(MED_GRAY).font('Regular').fontSize(8)
+    .text(
+      `Сформировано: ${new Date().toLocaleDateString('ru-RU')} | b2b.chip.am`,
+      40, bottom - 5,
+      { align: 'center', width: doc.page.width - 80, lineBreak: false }
+    );
 }
 
 // ─── Invoice PDF ─────────────────────────────────────────────────────────────
