@@ -154,7 +154,7 @@ export function generateInvoicePDF(
       .strokeColor(BRAND_COLOR).lineWidth(1).stroke();
 
     doc.font('Regular').fontSize(10).fillColor(DARK_GRAY);
-    doc.text('Получатель: ԱՁ Սalbина Аleksanyаn', 40, payY + 24);
+    doc.text('Получатель: ԱՁ Սalбина Аleksanyаn', 40, payY + 24);
     doc.text('Банк: Ամերիաբանկ ՓԲԸ', 40, payY + 40);
     doc.text('Счёт: 1570065472180100', 40, payY + 56);
 
@@ -166,15 +166,15 @@ export function generateInvoicePDF(
       .strokeColor(BRAND_COLOR).lineWidth(1).stroke();
 
     // Table header
-    const colX = { num: 40, name: 65, qty: 360, price: 420, total: 500 };
+    const colX = { num: 40, name: 65, qty: 340, price: 395, total: 470 };
     const headerY = tableStartY + 22;
     doc.rect(40, headerY, doc.page.width - 80, 18).fill(BRAND_COLOR);
-    doc.fillColor('white').font('Bold').fontSize(9);
-    doc.text('#', colX.num, headerY + 4);
-    doc.text('Наименование', colX.name, headerY + 4);
-    doc.text('Кол-во', colX.qty, headerY + 4);
-    doc.text('Цена (AMD)', colX.price, headerY + 4);
-    doc.text('Сумма (AMD)', colX.total, headerY + 4);
+    doc.fillColor('white').font('Bold').fontSize(8);
+    doc.text('#', colX.num, headerY + 5);
+    doc.text('Наименование', colX.name, headerY + 5);
+    doc.text('Кол-во', colX.qty, headerY + 5);
+    doc.text('Цена (AMD)', colX.price, headerY + 5);
+    doc.text('Сумма (AMD)', colX.total, headerY + 5);
 
     // Table rows
     let rowY = headerY + 22;
@@ -183,7 +183,7 @@ export function generateInvoicePDF(
       doc.rect(40, rowY, doc.page.width - 80, 18).fill(bg);
       doc.fillColor(DARK_GRAY).font('Regular').fontSize(9);
       doc.text(String(idx + 1), colX.num, rowY + 4);
-      doc.text(item.name ?? 'Товар', colX.name, rowY + 4, { width: 285, ellipsis: true });
+      doc.text(item.name ?? 'Товар', colX.name, rowY + 4, { width: 265, ellipsis: true });
       doc.text(String(item.quantity), colX.qty, rowY + 4);
       doc.text(item.price.toLocaleString('ru-RU'), colX.price, rowY + 4);
       doc.text((item.price * item.quantity).toLocaleString('ru-RU'), colX.total, rowY + 4);
@@ -196,7 +196,6 @@ export function generateInvoicePDF(
     doc.text('ИТОГО:', colX.price - 50, rowY + 5, { width: 100, align: 'right' });
     doc.text(formatAMD(order.total), colX.total - 5, rowY + 5);
 
-    drawFooter(doc);
     doc.end();
   });
 }
