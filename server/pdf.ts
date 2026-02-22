@@ -1,5 +1,16 @@
 import PDFDocument from 'pdfkit';
+import path from 'path';
 import type { Customer, Order, Product, Settings } from '@shared/schema';
+
+// Unicode-capable fonts (supports Cyrillic + Armenian including ֏ U+058F)
+const FONTS_DIR = path.join(process.cwd(), 'server', 'fonts');
+const REGULAR_FONT = path.join(FONTS_DIR, 'DejaVuSans.ttf');
+const BOLD_FONT = path.join(FONTS_DIR, 'DejaVuSans-Bold.ttf');
+
+function registerFonts(doc: InstanceType<typeof PDFDocument>) {
+  doc.registerFont('Regular', REGULAR_FONT);
+  doc.registerFont('Bold', BOLD_FONT);
+}
 
 const BRAND_COLOR = '#1d4ed8'; // blue-700
 const LIGHT_GRAY = '#f3f4f6';
@@ -57,14 +68,14 @@ function drawHeader(doc: InstanceType<typeof PDFDocument>, title: string) {
   doc.rect(0, 0, doc.page.width, 80).fill(BRAND_COLOR);
 
   // Company name
-  doc.fillColor('white').font('Helvetica-Bold').fontSize(20)
+  doc.fillColor('white').font('Bold').fontSize(20)
     .text('chip.am', 40, 25, { continued: false });
 
-  doc.fillColor('white').font('Helvetica').fontSize(10)
+  doc.fillColor('white').font('Regular').fontSize(10)
     .text('B2B Portal — ' + APP_URL, 40, 50);
 
   // Document title (right aligned)
-  doc.fillColor('white').font('Helvetica-Bold').fontSize(16)
+  doc.fillColor('white').font('Bold').fontSize(16)
     .text(title, 0, 30, { align: 'right', width: doc.page.width - 40 });
 
   doc.fillColor(DARK_GRAY);
@@ -75,7 +86,7 @@ function drawFooter(doc: InstanceType<typeof PDFDocument>) {
   const bottom = doc.page.height - 40;
   doc.moveTo(40, bottom - 10).lineTo(doc.page.width - 40, bottom - 10)
     .strokeColor('#e5e7eb').lineWidth(1).stroke();
-  doc.fillColor(MED_GRAY).font('Helvetica').fontSize(8)
+  doc.fillColor(MED_GRAY).font('Regular').fontSize(8)
     .text(
       `Сформировано: ${new Date().toLocaleDateString('ru-RU')} | chip.am B2B Portal`,
       40, bottom - 5,
@@ -91,6 +102,7 @@ export function generateInvoicePDF(
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 40, size: 'A4' });
+    registerFonts(doc);
     const chunks: Buffer[] = [];
 
     doc.on('data', chunk => chunks.push(chunk));
@@ -103,34 +115,34 @@ export function generateInvoicePDF(
 
     // ── Order meta info ──
     const startY = 100;
-    doc.font('Helvetica-Bold').fontSize(11).fillColor(BRAND_COLOR)
+    doc.font('Bold').fontSize(11).fillColor(BRAND_COLOR)
       .text('Информация о заказе', 40, startY);
     doc.moveTo(40, startY + 16).lineTo(doc.page.width - 40, startY + 16)
       .strokeColor(BRAND_COLOR).lineWidth(1).stroke();
 
-    doc.font('Helvetica').fontSize(10).fillColor(DARK_GRAY);
+    doc.font('Regular').fontSize(10).fillColor(DARK_GRAY);
     const metaY = startY + 24;
     doc.text(`Номер заказа:`, 40, metaY, { continued: true })
-       .font('Helvetica-Bold').text(` #${order.orderNumber}`);
-    doc.font('Helvetica').text(`Дата заказа:`, 40, metaY + 16, { continued: true })
-       .font('Helvetica-Bold').text(` ${formatDate(order.createdAt)}`);
-    doc.font('Helvetica').text(`Статус оплаты:`, 40, metaY + 32, { continued: true })
-       .font('Helvetica-Bold').text(` ${paymentStatusLabel(order.paymentStatus)}`);
-    doc.font('Helvetica').text(`Статус доставки:`, 40, metaY + 48, { continued: true })
-       .font('Helvetica-Bold').text(` ${deliveryStatusLabel(order.deliveryStatus)}`);
+       .font('Bold').text(` #${order.orderNumber}`);
+    doc.font('Regular').text(`Дата заказа:`, 40, metaY + 16, { continued: true })
+       .font('Bold').text(` ${formatDate(order.createdAt)}`);
+    doc.font('Regular').text(`Статус оплаты:`, 40, metaY + 32, { continued: true })
+       .font('Bold').text(` ${paymentStatusLabel(order.paymentStatus)}`);
+    doc.font('Regular').text(`Статус доставки:`, 40, metaY + 48, { continued: true })
+       .font('Bold').text(` ${deliveryStatusLabel(order.deliveryStatus)}`);
     if (order.deliveryDate) {
-      doc.font('Helvetica').text(`Дата доставки:`, 40, metaY + 64, { continued: true })
-         .font('Helvetica-Bold').text(` ${formatDate(order.deliveryDate)}`);
+      doc.font('Regular').text(`Дата доставки:`, 40, metaY + 64, { continued: true })
+         .font('Bold').text(` ${formatDate(order.deliveryDate)}`);
     }
 
     // ── Customer info ──
     const custY = metaY + (order.deliveryDate ? 90 : 74);
-    doc.font('Helvetica-Bold').fontSize(11).fillColor(BRAND_COLOR)
+    doc.font('Bold').fontSize(11).fillColor(BRAND_COLOR)
       .text('Клиент', 40, custY);
     doc.moveTo(40, custY + 16).lineTo(doc.page.width - 40, custY + 16)
       .strokeColor(BRAND_COLOR).lineWidth(1).stroke();
 
-    doc.font('Helvetica').fontSize(10).fillColor(DARK_GRAY);
+    doc.font('Regular').fontSize(10).fillColor(DARK_GRAY);
     const cY = custY + 24;
     doc.text(`Компания: ${customer.companyName}`, 40, cY);
     doc.text(`ИНН: ${customer.taxId}`, 40, cY + 16);
@@ -145,7 +157,7 @@ export function generateInvoicePDF(
 
     // ── Items table ──
     const tableStartY = cY + (customer.bankName ? 138 : 106);
-    doc.font('Helvetica-Bold').fontSize(11).fillColor(BRAND_COLOR)
+    doc.font('Bold').fontSize(11).fillColor(BRAND_COLOR)
       .text('Товары', 40, tableStartY);
     doc.moveTo(40, tableStartY + 16).lineTo(doc.page.width - 40, tableStartY + 16)
       .strokeColor(BRAND_COLOR).lineWidth(1).stroke();
@@ -154,7 +166,7 @@ export function generateInvoicePDF(
     const colX = { num: 40, name: 65, qty: 360, price: 420, total: 500 };
     const headerY = tableStartY + 22;
     doc.rect(40, headerY, doc.page.width - 80, 18).fill(BRAND_COLOR);
-    doc.fillColor('white').font('Helvetica-Bold').fontSize(9);
+    doc.fillColor('white').font('Bold').fontSize(9);
     doc.text('#', colX.num, headerY + 4);
     doc.text('Наименование', colX.name, headerY + 4);
     doc.text('Кол-во', colX.qty, headerY + 4);
@@ -166,7 +178,7 @@ export function generateInvoicePDF(
     items.forEach((item, idx) => {
       const bg = idx % 2 === 0 ? 'white' : LIGHT_GRAY;
       doc.rect(40, rowY, doc.page.width - 80, 18).fill(bg);
-      doc.fillColor(DARK_GRAY).font('Helvetica').fontSize(9);
+      doc.fillColor(DARK_GRAY).font('Regular').fontSize(9);
       doc.text(String(idx + 1), colX.num, rowY + 4);
       doc.text(item.name ?? 'Товар', colX.name, rowY + 4, { width: 285, ellipsis: true });
       doc.text(String(item.quantity), colX.qty, rowY + 4);
@@ -177,7 +189,7 @@ export function generateInvoicePDF(
 
     // Total row
     doc.rect(40, rowY, doc.page.width - 80, 22).fill(BRAND_COLOR);
-    doc.fillColor('white').font('Helvetica-Bold').fontSize(10);
+    doc.fillColor('white').font('Bold').fontSize(10);
     doc.text('ИТОГО:', colX.price - 50, rowY + 5, { width: 100, align: 'right' });
     doc.text(formatAMD(order.total), colX.total - 5, rowY + 5);
 
@@ -195,6 +207,7 @@ export function generatePriceListPDF(
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 40, size: 'A4' });
+    registerFonts(doc);
     const chunks: Buffer[] = [];
 
     doc.on('data', chunk => chunks.push(chunk));
@@ -218,10 +231,10 @@ export function generatePriceListPDF(
     }
 
     const startY = 100;
-    doc.font('Helvetica').fontSize(10).fillColor(DARK_GRAY);
+    doc.font('Regular').fontSize(10).fillColor(DARK_GRAY);
     doc.text(`Клиент: `, 40, startY, { continued: true })
-       .font('Helvetica-Bold').text(customer.companyName);
-    doc.font('Helvetica').text(`ИНН: ${customer.taxId}`, 40, startY + 16);
+       .font('Bold').text(customer.companyName);
+    doc.font('Regular').text(`ИНН: ${customer.taxId}`, 40, startY + 16);
     doc.text(`Тип клиента: ${customer.customerType}`, 40, startY + 32);
     doc.text(`Дата формирования: ${new Date().toLocaleDateString('ru-RU')}`, 40, startY + 48);
 
@@ -233,7 +246,7 @@ export function generatePriceListPDF(
 
     // Table
     const tableStartY = startY + 72;
-    doc.font('Helvetica-Bold').fontSize(11).fillColor(BRAND_COLOR)
+    doc.font('Bold').fontSize(11).fillColor(BRAND_COLOR)
       .text(`Товары (${visibleProducts.length} позиций)`, 40, tableStartY);
     doc.moveTo(40, tableStartY + 16).lineTo(doc.page.width - 40, tableStartY + 16)
       .strokeColor(BRAND_COLOR).lineWidth(1).stroke();
@@ -241,7 +254,7 @@ export function generatePriceListPDF(
     const colX = { num: 40, name: 60, brand: 280, category: 355, price: 450, stock: 515 };
     const headerY = tableStartY + 22;
     doc.rect(40, headerY, doc.page.width - 80, 18).fill(BRAND_COLOR);
-    doc.fillColor('white').font('Helvetica-Bold').fontSize(8);
+    doc.fillColor('white').font('Bold').fontSize(8);
     doc.text('#', colX.num, headerY + 4);
     doc.text('Наименование', colX.name, headerY + 4);
     doc.text('Бренд', colX.brand, headerY + 4);
@@ -260,7 +273,7 @@ export function generatePriceListPDF(
 
       const bg = idx % 2 === 0 ? 'white' : LIGHT_GRAY;
       doc.rect(40, rowY, doc.page.width - 80, 16).fill(bg);
-      doc.fillColor(DARK_GRAY).font('Helvetica').fontSize(8);
+      doc.fillColor(DARK_GRAY).font('Regular').fontSize(8);
       doc.text(String(idx + 1), colX.num, rowY + 3);
       doc.text(product.name, colX.name, rowY + 3, { width: 215, ellipsis: true });
       doc.text(product.brand ?? '—', colX.brand, rowY + 3, { width: 70, ellipsis: true });
