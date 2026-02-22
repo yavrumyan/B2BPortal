@@ -290,15 +290,29 @@ export default function OrderDetail() {
                 })}
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.open(`/api/orders/${order.id}/pdf`, "_blank")}
-              data-testid="button-download-invoice"
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Накладная PDF
-            </Button>
+            {(() => {
+              const pdfAllowed = isAdmin ||
+                ['confirmed', 'transit', 'delivered'].includes(order.deliveryStatus);
+              return (
+                <div className="flex flex-col items-end gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!pdfAllowed}
+                    onClick={() => pdfAllowed && window.open(`/api/orders/${order.id}/pdf`, "_blank")}
+                    data-testid="button-download-invoice"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Накладная PDF
+                  </Button>
+                  {!pdfAllowed && (
+                    <p className="text-xs text-muted-foreground">
+                      Доступно после подтверждения заказа
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </CardHeader>
         <CardContent className="space-y-6">

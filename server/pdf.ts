@@ -12,7 +12,7 @@ function registerFonts(doc: InstanceType<typeof PDFDocument>) {
   doc.registerFont('Bold', BOLD_FONT);
 }
 
-const BRAND_COLOR = '#1d4ed8'; // blue-700
+const BRAND_COLOR = '#277a3c'; // chip.am dark green
 const LIGHT_GRAY = '#f3f4f6';
 const DARK_GRAY = '#374151';
 const MED_GRAY = '#6b7280';
@@ -155,8 +155,20 @@ export function generateInvoicePDF(
       doc.text(`Счёт: ${customer.bankAccount}`, 40, cY + 112);
     }
 
+    // ── Company payment details ──
+    const payY = cY + (customer.bankName ? 126 : 94);
+    doc.font('Bold').fontSize(11).fillColor(BRAND_COLOR)
+      .text('Реквизиты получателя', 40, payY);
+    doc.moveTo(40, payY + 16).lineTo(doc.page.width - 40, payY + 16)
+      .strokeColor(BRAND_COLOR).lineWidth(1).stroke();
+
+    doc.font('Regular').fontSize(10).fillColor(DARK_GRAY);
+    doc.text('Получатель: chip.am', 40, payY + 24);
+    doc.text('Банк: Ամերիաբանկ ՓԲԸ', 40, payY + 40);
+    doc.text('Счёт: 1570065472180100', 40, payY + 56);
+
     // ── Items table ──
-    const tableStartY = cY + (customer.bankName ? 138 : 106);
+    const tableStartY = payY + 80;
     doc.font('Bold').fontSize(11).fillColor(BRAND_COLOR)
       .text('Товары', 40, tableStartY);
     doc.moveTo(40, tableStartY + 16).lineTo(doc.page.width - 40, tableStartY + 16)
