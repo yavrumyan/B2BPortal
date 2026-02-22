@@ -23,7 +23,7 @@ type OrderItem = { productId: string; name?: string; price: number; quantity: nu
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
 function formatAMD(amount: number): string {
-  return amount.toLocaleString('ru-RU') + ' ֏';
+  return amount.toLocaleString('ru-RU') + ' AMD';
 }
 
 function formatDate(date: Date | string | null | undefined): string {
@@ -69,7 +69,7 @@ function drawHeader(doc: InstanceType<typeof PDFDocument>, title: string) {
 
   // Company name
   doc.fillColor('white').font('Bold').fontSize(20)
-    .text('chip.am', 40, 25, { continued: false });
+    .text('CHIP Technologies', 40, 25, { continued: false });
 
   doc.fillColor('white').font('Regular').fontSize(10)
     .text('B2B Portal — ' + APP_URL, 40, 50);
@@ -86,12 +86,16 @@ function drawFooter(doc: InstanceType<typeof PDFDocument>) {
   const bottom = doc.page.height - 40;
   doc.moveTo(40, bottom - 10).lineTo(doc.page.width - 40, bottom - 10)
     .strokeColor('#e5e7eb').lineWidth(1).stroke();
-  doc.fillColor(MED_GRAY).font('Regular').fontSize(8)
-    .text(
-      `Сформировано: ${new Date().toLocaleDateString('ru-RU')} | chip.am B2B Portal`,
-      40, bottom - 5,
-      { align: 'center', width: doc.page.width - 80 }
-    );
+  // lineBreak: false prevents cursor from advancing past the page margin
+  // and triggering an unwanted blank second page
+  const dateStr = `Сформировано: ${new Date().toLocaleDateString('ru-RU')} | `;
+  doc.font('Regular').fontSize(8);
+  const textW = doc.widthOfString(dateStr + 'b2b.chip.am');
+  const textX = (doc.page.width - textW) / 2;
+  doc.fillColor(MED_GRAY)
+    .text(dateStr, textX, bottom - 5, { continued: true, lineBreak: false });
+  doc.fillColor(BRAND_COLOR)
+    .text('b2b.chip.am', { link: 'https://b2b.chip.am', underline: true, lineBreak: false });
 }
 
 // ─── Invoice PDF ─────────────────────────────────────────────────────────────
@@ -126,17 +130,13 @@ export function generateInvoicePDF(
        .font('Bold').text(` #${order.orderNumber}`);
     doc.font('Regular').text(`Дата заказа:`, 40, metaY + 16, { continued: true })
        .font('Bold').text(` ${formatDate(order.createdAt)}`);
-    doc.font('Regular').text(`Статус оплаты:`, 40, metaY + 32, { continued: true })
-       .font('Bold').text(` ${paymentStatusLabel(order.paymentStatus)}`);
-    doc.font('Regular').text(`Статус доставки:`, 40, metaY + 48, { continued: true })
-       .font('Bold').text(` ${deliveryStatusLabel(order.deliveryStatus)}`);
     if (order.deliveryDate) {
-      doc.font('Regular').text(`Дата доставки:`, 40, metaY + 64, { continued: true })
+      doc.font('Regular').text(`Дата доставки:`, 40, metaY + 32, { continued: true })
          .font('Bold').text(` ${formatDate(order.deliveryDate)}`);
     }
 
     // ── Customer info ──
-    const custY = metaY + (order.deliveryDate ? 90 : 74);
+    const custY = metaY + (order.deliveryDate ? 48 : 32);
     doc.font('Bold').fontSize(11).fillColor(BRAND_COLOR)
       .text('Клиент', 40, custY);
     doc.moveTo(40, custY + 16).lineTo(doc.page.width - 40, custY + 16)
@@ -146,24 +146,18 @@ export function generateInvoicePDF(
     const cY = custY + 24;
     doc.text(`Компания: ${customer.companyName}`, 40, cY);
     doc.text(`ИНН: ${customer.taxId}`, 40, cY + 16);
-    doc.text(`Представитель: ${customer.representativeName}`, 40, cY + 32);
-    doc.text(`Адрес доставки: ${customer.deliveryAddress}`, 40, cY + 48);
-    doc.text(`Email: ${customer.email}`, 40, cY + 64);
-    doc.text(`Телефон: ${customer.phone}`, 40, cY + 80);
-    if (customer.bankName) {
-      doc.text(`Банк: ${customer.bankName}`, 40, cY + 96);
-      doc.text(`Счёт: ${customer.bankAccount}`, 40, cY + 112);
-    }
+    doc.text(`Email: ${customer.email}`, 40, cY + 32);
+    doc.text(`Телефон: ${customer.phone}`, 40, cY + 48);
 
     // ── Company payment details ──
-    const payY = cY + (customer.bankName ? 126 : 94);
+    const payY = cY + 64;
     doc.font('Bold').fontSize(11).fillColor(BRAND_COLOR)
       .text('Реквизиты получателя', 40, payY);
     doc.moveTo(40, payY + 16).lineTo(doc.page.width - 40, payY + 16)
       .strokeColor(BRAND_COLOR).lineWidth(1).stroke();
 
     doc.font('Regular').fontSize(10).fillColor(DARK_GRAY);
-    doc.text('Получатель: chip.am', 40, payY + 24);
+    doc.text('Получатель: ԱՁ Սalbина Аleksanyаn', 40, payY + 24);
     doc.text('Банк: Ամերիաբանկ ՓԲԸ', 40, payY + 40);
     doc.text('Счёт: 1570065472180100', 40, payY + 56);
 
@@ -182,8 +176,8 @@ export function generateInvoicePDF(
     doc.text('#', colX.num, headerY + 4);
     doc.text('Наименование', colX.name, headerY + 4);
     doc.text('Кол-во', colX.qty, headerY + 4);
-    doc.text('Цена (֏)', colX.price, headerY + 4);
-    doc.text('Сумма (֏)', colX.total, headerY + 4);
+    doc.text('Цена (AMD)', colX.price, headerY + 4);
+    doc.text('Сумма (AMD)', colX.total, headerY + 4);
 
     // Table rows
     let rowY = headerY + 22;
@@ -271,7 +265,7 @@ export function generatePriceListPDF(
     doc.text('Наименование', colX.name, headerY + 4);
     doc.text('Бренд', colX.brand, headerY + 4);
     doc.text('Категория', colX.category, headerY + 4);
-    doc.text('Цена (֏)', colX.price, headerY + 4);
+    doc.text('Цена (AMD)', colX.price, headerY + 4);
     doc.text('Наличие', colX.stock, headerY + 4);
 
     let rowY = headerY + 22;
