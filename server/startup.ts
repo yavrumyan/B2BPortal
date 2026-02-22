@@ -83,7 +83,9 @@ async function ensureTablesExist() {
 
   try {
     await db.select().from(customers).limit(1);
-    console.log("[STARTUP] Database tables exist.");
+    console.log("[STARTUP] Core tables exist. Running IF NOT EXISTS migrations for new tables...");
+    // Always run IF NOT EXISTS migrations so new tables are created on existing databases
+    await createTablesManually();
   } catch (err: any) {
     if (err.message?.includes("does not exist") || err.code === "42P01") {
       console.log("[STARTUP] Tables not found. Please run 'npx drizzle-kit push' to create tables.");
