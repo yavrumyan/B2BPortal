@@ -14,6 +14,7 @@ The app already has a solid foundation:
 - CSV product import/export
 - Recharts already installed (not yet used)
 - Nodemailer already configured (only used for password reset)
+- **PDF generation implemented** — `server/pdf.ts` with `pdfkit`; invoice + price list PDF both working ✅
 
 ---
 
@@ -60,21 +61,7 @@ Nodemailer + Gmail SMTP is already set up in `server/email.ts`.
 
 ---
 
-#### 3. PDF Invoice / Order Document Generation
-**Why:** B2B customers universally need invoices and order confirmations as PDF documents for accounting.
-Currently there is NO PDF output at all — no library, no endpoint.
-
-**What to add:**
-- **Order Invoice PDF** — customer can download from order detail page
-- **Admin can generate invoice PDF** per order
-- Contains: order number, date, customer company/tax ID/bank, items, total, payment status
-
-**Library to add:** `pdf-lib` or `@react-pdf/renderer` (client-side) or `pdfkit` (server-side).
-**Effort:** Medium.
-
----
-
-#### 4. Order Reorder Button
+#### 3. Order Reorder Button
 **Why:** B2B customers frequently repeat orders (same hardware, same quantities). Currently impossible to quickly reorder.
 
 **What to add:**
@@ -91,7 +78,7 @@ Currently there is NO PDF output at all — no library, no endpoint.
 
 ---
 
-#### 5. Order Comments / Notes Thread
+#### 4. Order Comments / Notes Thread
 **Why:** In B2B, orders often need back-and-forth communication (special instructions, delivery notes,
 payment arrangement). Currently there's zero communication channel on an order.
 
@@ -105,7 +92,7 @@ payment arrangement). Currently there's zero communication channel on an order.
 
 ---
 
-#### 6. Stock Alert / Back-in-Stock Notification
+#### 5. Stock Alert / Back-in-Stock Notification
 **Why:** B2B customers often want a product that's currently out of stock. Competitors let you subscribe for alerts.
 
 **What to add:**
@@ -118,7 +105,7 @@ payment arrangement). Currently there's zero communication channel on an order.
 
 ---
 
-#### 7. Saved Lists / Favorites
+#### 6. Saved Lists / Favorites
 **Why:** IT buyers often compare quotes, prepare tender lists, or have recurring procurement lists.
 
 **What to add:**
@@ -131,7 +118,7 @@ payment arrangement). Currently there's zero communication channel on an order.
 
 ---
 
-#### 8. Customer-Side Bulk Order (CSV Upload)
+#### 7. Customer-Side Bulk Order (CSV Upload)
 **Why:** Large B2B buyers (corporate, government) often receive hardware tender lists in Excel and need to upload them.
 
 **What to add:**
@@ -144,7 +131,7 @@ payment arrangement). Currently there's zero communication channel on an order.
 
 ---
 
-#### 9. Product Detail / Specification Page
+#### 8. Product Detail / Specification Page
 **Why:** Every major IT hardware portal has a dedicated product page with full specs, description, images.
 Currently products show only in a catalog grid with minimal info.
 
@@ -159,7 +146,7 @@ Currently products show only in a catalog grid with minimal info.
 
 ---
 
-#### 10. Overdue Payment Reminders (Automated Emails)
+#### 9. Overdue Payment Reminders (Automated Emails)
 **Why:** Admin currently has to manually track which customers have overdue payments.
 The `overdueAmount` is already calculated — just needs automated emails.
 
@@ -178,7 +165,7 @@ The `overdueAmount` is already calculated — just needs automated emails.
 
 ---
 
-#### 11. Admin Audit Log
+#### 10. Admin Audit Log
 **Why:** For any business-critical system, you need to know who changed what and when.
 Currently there's no history of changes — if an order total is changed, no one knows who did it.
 
@@ -191,7 +178,7 @@ Currently there's no history of changes — if an order total is changed, no one
 
 ---
 
-#### 12. Multi-User Per Company Account
+#### 11. Multi-User Per Company Account
 **Why:** Large corporate clients have multiple people who need portal access (procurement, accounting, IT manager).
 Currently one company = one login.
 
@@ -205,20 +192,7 @@ Currently one company = one login.
 
 ---
 
-#### 13. Price List PDF Download
-**Why:** Customers often need to share current pricing with their managers before approval.
-Ingram Micro, TD Synnex all have downloadable price lists.
-
-**What to add:**
-- Customer can download their personalized price list as PDF or Excel
-- Shows products with their customer-type price applied
-- Admin can generate price list for any customer
-
-**Effort:** Medium (needs PDF library).
-
----
-
-#### 14. Advanced Order Search & Filtering (Admin)
+#### 12. Advanced Order Search & Filtering (Admin)
 **Why:** As orders grow, admin needs to filter by date range, customer, status, amount.
 Currently all orders are shown in one flat list with no search or filters.
 
@@ -233,7 +207,7 @@ Currently all orders are shown in one flat list with no search or filters.
 
 ---
 
-#### 15. Formal Quote Workflow
+#### 13. Formal Quote Workflow
 **Why:** IT hardware B2B often involves a formal quote stage before a purchase order.
 The inquiry/offer system partially covers this, but lacks formal quote numbering, expiry dates, PDF output.
 
@@ -253,35 +227,42 @@ The inquiry/offer system partially covers this, but lacks formal quote numbering
 |---|---------|--------|--------|--------------------|
 | 1 | Email notifications (order/inquiry/approval) | Low | 🔴 Very High | ✅ Yes (Nodemailer) |
 | 2 | Admin analytics dashboard | Medium | 🔴 High | ✅ Yes (Recharts) |
-| 3 | PDF invoice/order generation | Medium | 🔴 High | Needs new library |
-| 4 | Reorder button | Low | 🟡 High | ✅ Yes |
-| 5 | Order comments/notes | Medium | 🟡 Medium | Partial |
-| 6 | Stock alerts | Medium | 🟡 Medium | ✅ Mostly |
-| 7 | Saved lists/favorites | Medium | 🟡 Medium | Partial |
-| 8 | Customer bulk CSV order upload | Medium | 🟡 Medium | ✅ Yes (csvUtils) |
-| 9 | Product detail page | Medium | 🟡 Medium | Partial |
-| 10 | Overdue payment reminders (auto email) | Medium | 🟡 Medium | ✅ Yes (Nodemailer) |
-| 11 | Admin audit log | Medium-High | 🟢 Medium | No |
-| 12 | Multi-user per company | High | 🟢 Medium | No |
-| 13 | Price list PDF download | Medium | 🟢 Medium | Needs library |
-| 14 | Advanced order search/filter (admin) | Low-Medium | 🟡 Medium | ✅ Mostly |
-| 15 | Formal quote workflow | High | 🟢 Low-Med | Partial |
+| 3 | Reorder button | Low | 🟡 High | ✅ Yes |
+| 4 | Order comments/notes | Medium | 🟡 Medium | Partial |
+| 5 | Stock alerts | Medium | 🟡 Medium | ✅ Mostly |
+| 6 | Saved lists/favorites | Medium | 🟡 Medium | Partial |
+| 7 | Customer bulk CSV order upload | Medium | 🟡 Medium | ✅ Yes (csvUtils) |
+| 8 | Product detail page | Medium | 🟡 Medium | Partial |
+| 9 | Overdue payment reminders (auto email) | Medium | 🟡 Medium | ✅ Yes (Nodemailer) |
+| 10 | Admin audit log | Medium-High | 🟢 Medium | No |
+| 11 | Multi-user per company | High | 🟢 Medium | No |
+| 12 | Advanced order search/filter (admin) | Low-Medium | 🟡 Medium | ✅ Mostly |
+| 13 | Formal quote workflow | High | 🟢 Low-Med | Partial |
+
+---
+
+## Already Implemented ✅
+
+| Feature | Notes |
+|---------|-------|
+| PDF Invoice (order) | `server/pdf.ts` → `generateInvoicePDF`; route `GET /api/orders/:id/pdf`; button in `OrderDetail.tsx` gated by delivery status |
+| Price List PDF | `server/pdf.ts` → `generatePriceListPDF`; route `GET /api/customers/:id/pricelist`; uses customer-type markup from Settings |
 
 ---
 
 ## Suggested Implementation Order
 
 **Phase 1 (Quick wins, low effort, high impact):**
-→ Email notifications (#1) → Reorder button (#4) → Advanced order search (#14)
+→ Email notifications (#1) → Reorder button (#3) → Advanced order search (#12)
 
 **Phase 2 (Core B2B features):**
-→ Analytics dashboard (#2) → PDF invoices (#3) → Order comments (#5)
+→ Analytics dashboard (#2) → Order comments (#4)
 
 **Phase 3 (Competitive features):**
-→ Stock alerts (#6) → Saved lists (#7) → Bulk CSV orders (#8) → Product detail page (#9)
+→ Stock alerts (#5) → Saved lists (#6) → Bulk CSV orders (#7) → Product detail page (#8)
 
 **Phase 4 (Enterprise features):**
-→ Audit log (#11) → Overdue reminders (#10) → Price list PDF (#13) → Multi-user (#12)
+→ Audit log (#10) → Overdue reminders (#9) → Multi-user (#11)
 
 ---
 
