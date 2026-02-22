@@ -182,6 +182,21 @@ export const insertOfferSchema = createInsertSchema(offers).omit({
 export type InsertOffer = z.infer<typeof insertOfferSchema>;
 export type Offer = typeof offers.$inferSelect;
 
+// Order comments/notes table
+export const orderComments = pgTable("order_comments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: varchar("order_id").notNull().references(() => orders.id),
+  authorId: varchar("author_id").notNull(),
+  authorRole: varchar("author_role", { length: 20 }).notNull(), // 'admin' or 'customer'
+  authorName: varchar("author_name", { length: 255 }).notNull(),
+  message: text("message").notNull(),
+  isInternal: boolean("is_internal").default(false).notNull(), // only visible to admin
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type OrderComment = typeof orderComments.$inferSelect;
+export type InsertOrderComment = typeof orderComments.$inferInsert;
+
 // Password reset tokens table
 export const passwordResetTokens = pgTable("password_reset_tokens", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

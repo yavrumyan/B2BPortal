@@ -10,9 +10,24 @@ import {
   insertInquirySchema,
   insertOfferSchema,
   inquiries,
+  orders,
+  customers,
+  orderComments,
+  type InsertOrderComment,
 } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, desc, and, lt, ne, gte, sql } from "drizzle-orm";
 import { db } from "./db";
+import {
+  sendRegistrationApprovedEmail,
+  sendRegistrationRejectedEmail,
+  sendAdminNewRegistrationEmail,
+  sendOrderConfirmationEmail,
+  sendOrderStatusChangedEmail,
+  sendAdminNewOrderEmail,
+  sendNewOfferEmail,
+  sendAdminNewInquiryEmail,
+} from "./email.js";
+import { generateInvoicePDF, generatePriceListPDF } from "./pdf.js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // One-time initialization endpoint to seed production database
@@ -246,6 +261,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const { password: _, ...customerWithoutPassword } = customer;
+      // Fire-and-forget email notifications
+      sendAdminNewRegistrationEmail(customer).catch(e => console.error('[EMAIL]', e));
       res.json(customerWithoutPassword);
     } catch (error: any) {
       console.error("Registration error:", error);
@@ -446,6 +463,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create the order
       const order = await storage.createOrder(validatedData);
 
+      // Fire-and-forget order confirmation emails
+      Promise.all([
+        sendOrderConfirmationEmail(orderingCustomer, order),
+        sendAdminNewOrderEmail(orderingCustomer, order),
+      ]).catch(e => console.error('[EMAIL]', e));
+
       // Deduct quantities from product stock (only for catalog products, not offer items)
       // Also update inquiry status for offer items
       await Promise.all(
@@ -522,12 +545,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { paymentStatus } = req.body;
       const order = await storage.updateOrderPaymentStatus(req.params.id, paymentStatus);
-      
-      // Update customer status based on new overdue payment totals
+
       if (order) {
+        // Update customer status based on new overdue payment totals
         await storage.updateCustomerStatusByDebt(order.customerId);
+        // Notify customer of payment status change
+        const customer = await storage.getCustomerById(order.customerId);
+        if (customer) {
+          sendOrderStatusChangedEmail(customer, order, 'payment').catch(e => console.error('[EMAIL]', e));
+        }
       }
-      
+
       res.json(order);
     } catch (error) {
       console.error("Update payment status error:", error);
@@ -539,6 +567,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { deliveryStatus } = req.body;
       const order = await storage.updateOrderDeliveryStatus(req.params.id, deliveryStatus);
+
+      if (order) {
+        // Notify customer of delivery status change
+        const customer = await storage.getCustomerById(order.customerId);
+        if (customer) {
+          sendOrderStatusChangedEmail(customer, order, 'delivery').catch(e => console.error('[EMAIL]', e));
+        }
+      }
+
       res.json(order);
     } catch (error) {
       console.error("Update delivery status error:", error);
@@ -732,6 +769,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const updatedCustomer = await storage.updateCustomer(id, updates);
+
+      // Send email when admin approves or rejects a registration
+      if (isAdmin && updates.status && updatedCustomer.role !== 'admin') {
+        if (updates.status === 'approved') {
+          sendRegistrationApprovedEmail(updatedCustomer).catch(e => console.error('[EMAIL]', e));
+        } else if (updates.status === 'rejected') {
+          sendRegistrationRejectedEmail(updatedCustomer).catch(e => console.error('[EMAIL]', e));
+        }
+      }
+
       const { password: _, ...customerWithoutPassword } = updatedCustomer;
       res.json(customerWithoutPassword);
     } catch (error: any) {
@@ -783,6 +830,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         customerId: req.session.customerId,
       });
       const inquiry = await storage.createInquiry(validatedData);
+
+      // Notify admin about new inquiry (fire-and-forget)
+      storage.getCustomerById(req.session.customerId!).then(cust => {
+        if (cust) sendAdminNewInquiryEmail(cust).catch(e => console.error('[EMAIL]', e));
+      }).catch(() => {});
+
       res.json(inquiry);
     } catch (error: any) {
       console.error("Create inquiry error:", error);
@@ -862,6 +915,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         // Mark inquiry as unseen so customer sees the badge
         await db.update(inquiries).set({ seen: false }).where(eq(inquiries.id, req.body.inquiryId));
+
+        // Notify customer about new offer
+        const inquiryCustomer = await storage.getCustomerById(inquiry.customerId);
+        if (inquiryCustomer) {
+          sendNewOfferEmail(inquiryCustomer, req.body.inquiryId).catch(e => console.error('[EMAIL]', e));
+        }
       }
 
       res.json(offer);
@@ -928,6 +987,255 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Delete inquiry error:", error);
       res.status(500).json({ message: error.message || "Failed to delete inquiry" });
+    }
+  });
+
+  // ─── Analytics ──────────────────────────────────────────────────────────────
+
+  app.get("/api/analytics", isAdmin, async (req, res) => {
+    try {
+      const now = new Date();
+      const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+      // All orders
+      const allOrders = await storage.getOrders();
+      const allCustomers = await storage.getCustomers();
+      const nonAdminCustomers = allCustomers.filter(c => c.role !== 'admin');
+
+      // Revenue this month vs last month
+      const thisMonthOrders = allOrders.filter(o => o.createdAt && new Date(o.createdAt) >= startOfThisMonth);
+      const lastMonthOrders = allOrders.filter(o => {
+        if (!o.createdAt) return false;
+        const d = new Date(o.createdAt);
+        return d >= startOfLastMonth && d < startOfThisMonth;
+      });
+      const revenueThisMonth = thisMonthOrders.reduce((s, o) => s + o.total, 0);
+      const revenueLastMonth = lastMonthOrders.reduce((s, o) => s + o.total, 0);
+
+      // Orders per day (last 30 days)
+      const dailyMap = new Map<string, { date: string; orders: number; revenue: number }>();
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+        const key = d.toISOString().slice(0, 10);
+        dailyMap.set(key, { date: key, orders: 0, revenue: 0 });
+      }
+      allOrders.forEach(o => {
+        if (!o.createdAt) return;
+        const key = new Date(o.createdAt).toISOString().slice(0, 10);
+        if (dailyMap.has(key)) {
+          const entry = dailyMap.get(key)!;
+          entry.orders += 1;
+          entry.revenue += o.total;
+        }
+      });
+      const dailyOrders = Array.from(dailyMap.values());
+
+      // Revenue by customer type
+      const revenueByType: Record<string, number> = { дилер: 0, корпоративный: 0, 'гос. учреждение': 0 };
+      for (const order of allOrders) {
+        const cust = allCustomers.find(c => c.id === order.customerId);
+        if (cust) {
+          const type = cust.customerType ?? 'дилер';
+          revenueByType[type] = (revenueByType[type] ?? 0) + order.total;
+        }
+      }
+      const revenueByTypeArr = Object.entries(revenueByType).map(([type, value]) => ({ type, value }));
+
+      // Top 5 customers by revenue
+      const customerRevenue = new Map<string, number>();
+      for (const order of allOrders) {
+        customerRevenue.set(order.customerId, (customerRevenue.get(order.customerId) ?? 0) + order.total);
+      }
+      const topCustomers = Array.from(customerRevenue.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([id, revenue]) => {
+          const cust = allCustomers.find(c => c.id === id);
+          return { id, name: cust?.companyName ?? id, revenue };
+        });
+
+      // Top 5 products by revenue
+      const productRevenue = new Map<string, { name: string; revenue: number }>();
+      for (const order of allOrders) {
+        const items = (order.items as any[]) ?? [];
+        for (const item of items) {
+          const key = item.productId ?? item.name;
+          const existing = productRevenue.get(key);
+          if (existing) {
+            existing.revenue += item.price * item.quantity;
+          } else {
+            productRevenue.set(key, { name: item.name ?? key, revenue: item.price * item.quantity });
+          }
+        }
+      }
+      const topProducts = Array.from(productRevenue.values())
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 5);
+
+      // Overdue total (unpaid or partial, older than 7 days)
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const overdueOrders = allOrders.filter(o =>
+        o.paymentStatus !== 'paid' &&
+        o.createdAt && new Date(o.createdAt) < sevenDaysAgo
+      );
+      const overdueTotal = overdueOrders.reduce((s, o) => {
+        const paid = o.paymentStatus === 'partially_paid' ? o.total * 0.5 : 0;
+        return s + (o.total - paid);
+      }, 0);
+
+      res.json({
+        revenueThisMonth,
+        revenueLastMonth,
+        totalOrders: allOrders.length,
+        totalCustomers: nonAdminCustomers.length,
+        overdueTotal,
+        dailyOrders,
+        revenueByType: revenueByTypeArr,
+        topCustomers,
+        topProducts,
+      });
+    } catch (error: any) {
+      console.error("Analytics error:", error);
+      res.status(500).json({ message: error.message || "Failed to get analytics" });
+    }
+  });
+
+  // ─── Order Comments ──────────────────────────────────────────────────────────
+
+  app.get("/api/orders/:id/comments", isAuthenticated, async (req, res) => {
+    try {
+      const order = await storage.getOrderById(req.params.id);
+      if (!order) return res.status(404).json({ message: "Order not found" });
+
+      const customer = await storage.getCustomerById(req.session.customerId!);
+      if (!customer) return res.status(401).json({ message: "Unauthorized" });
+
+      // Only admin or the order owner can see comments
+      if (customer.role !== 'admin' && order.customerId !== customer.id) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const comments = await storage.getOrderComments(req.params.id);
+
+      // Filter out internal comments for non-admins
+      const visibleComments = customer.role === 'admin'
+        ? comments
+        : comments.filter(c => !c.isInternal);
+
+      res.json(visibleComments);
+    } catch (error: any) {
+      console.error("Get comments error:", error);
+      res.status(500).json({ message: error.message || "Failed to get comments" });
+    }
+  });
+
+  app.post("/api/orders/:id/comments", isAuthenticated, async (req, res) => {
+    try {
+      const order = await storage.getOrderById(req.params.id);
+      if (!order) return res.status(404).json({ message: "Order not found" });
+
+      const customer = await storage.getCustomerById(req.session.customerId!);
+      if (!customer) return res.status(401).json({ message: "Unauthorized" });
+
+      // Only admin or order owner can comment
+      if (customer.role !== 'admin' && order.customerId !== customer.id) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const { message, isInternal } = req.body;
+      if (!message || !message.trim()) {
+        return res.status(400).json({ message: "Message is required" });
+      }
+
+      // Only admins can post internal notes
+      const internal = customer.role === 'admin' ? Boolean(isInternal) : false;
+
+      const comment = await storage.addOrderComment({
+        orderId: req.params.id,
+        authorId: customer.id,
+        authorRole: customer.role,
+        authorName: customer.role === 'admin' ? 'Менеджер' : customer.companyName,
+        message: message.trim(),
+        isInternal: internal,
+      });
+
+      res.json(comment);
+    } catch (error: any) {
+      console.error("Add comment error:", error);
+      res.status(500).json({ message: error.message || "Failed to add comment" });
+    }
+  });
+
+  // ─── PDF Endpoints ───────────────────────────────────────────────────────────
+
+  app.get("/api/orders/:id/pdf", isAuthenticated, async (req, res) => {
+    try {
+      const order = await storage.getOrderById(req.params.id);
+      if (!order) return res.status(404).json({ message: "Order not found" });
+
+      const requestingCustomer = await storage.getCustomerById(req.session.customerId!);
+      if (!requestingCustomer) return res.status(401).json({ message: "Unauthorized" });
+
+      // Only admin or order owner can download
+      if (requestingCustomer.role !== 'admin' && order.customerId !== requestingCustomer.id) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const orderCustomer = await storage.getCustomerById(order.customerId);
+      if (!orderCustomer) return res.status(404).json({ message: "Customer not found" });
+
+      const pdfBuffer = await generateInvoicePDF(
+        { ...order, customerName: orderCustomer.companyName },
+        orderCustomer
+      );
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="invoice-${order.orderNumber}.pdf"`);
+      res.send(pdfBuffer);
+    } catch (error: any) {
+      console.error("Generate invoice PDF error:", error);
+      res.status(500).json({ message: error.message || "Failed to generate PDF" });
+    }
+  });
+
+  app.get("/api/price-list/pdf", isAuthenticated, async (req, res) => {
+    try {
+      const customer = await storage.getCustomerById(req.session.customerId!);
+      if (!customer) return res.status(401).json({ message: "Unauthorized" });
+
+      const products = await storage.getProducts();
+      const settings = await storage.getSettings();
+
+      const pdfBuffer = await generatePriceListPDF(customer, products, settings);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="price-list-${customer.companyName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf"`);
+      res.send(pdfBuffer);
+    } catch (error: any) {
+      console.error("Generate price list PDF error:", error);
+      res.status(500).json({ message: error.message || "Failed to generate price list PDF" });
+    }
+  });
+
+  // Admin: generate price list PDF for any customer
+  app.get("/api/customers/:id/price-list/pdf", isAdmin, async (req, res) => {
+    try {
+      const customer = await storage.getCustomerById(req.params.id);
+      if (!customer) return res.status(404).json({ message: "Customer not found" });
+
+      const products = await storage.getProducts();
+      const settings = await storage.getSettings();
+
+      const pdfBuffer = await generatePriceListPDF(customer, products, settings);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="price-list-${customer.companyName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf"`);
+      res.send(pdfBuffer);
+    } catch (error: any) {
+      console.error("Generate customer price list PDF error:", error);
+      res.status(500).json({ message: error.message || "Failed to generate price list PDF" });
     }
   });
 

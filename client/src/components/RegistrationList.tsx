@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Check, X, Save, ChevronDown, Trash2 } from "lucide-react";
+import { Check, X, Save, ChevronDown, Trash2, Download } from "lucide-react";
 import { useState } from "react";
 import { CUSTOMER_TYPES, getCustomerTypeLabel } from "@shared/utils";
 import {
@@ -361,6 +361,16 @@ export default function RegistrationList({
                         >
                           <Save className="h-4 w-4 mr-1" />
                           SAVE
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => window.open(`/api/customers/${registration.id}/price-list/pdf`, "_blank")}
+                          data-testid={`button-price-list-${registration.id}`}
+                        >
+                          <Download className="h-4 w-4 mr-1" />
+                          Прайс PDF
                         </Button>
 
                         <Button

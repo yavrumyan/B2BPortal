@@ -988,9 +988,21 @@ export default function Home() {
 
           {(!isAuthenticated || activeSection === "products") && (
             <>
-              <div className="mb-6 flex items-baseline gap-3">
+              <div className="mb-6 flex items-center gap-3 flex-wrap">
                 <h1 className="text-3xl font-bold">Каталог товаров</h1>
                 <span className="text-sm text-muted-foreground">Цены включают НДС</span>
+                {isAuthenticated && !isAdmin && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="ml-auto"
+                    onClick={() => window.open("/api/price-list/pdf", "_blank")}
+                    data-testid="button-download-price-list"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Прайс-лист PDF
+                  </Button>
+                )}
               </div>
 
               {/* Filters */}

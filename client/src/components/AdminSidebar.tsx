@@ -1,11 +1,11 @@
-import { Package, Users, ShoppingBag, Mail, Settings, X } from "lucide-react";
+import { Package, Users, ShoppingBag, Mail, Settings, X, BarChart2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import logoPath from "@assets/logo.png";
 
 interface AdminSidebarProps {
-  activeSection?: "products" | "registrations" | "orders" | "inquiries" | "settings";
-  onSectionChange?: (section: "products" | "registrations" | "orders" | "inquiries" | "settings") => void;
+  activeSection?: "dashboard" | "products" | "registrations" | "orders" | "inquiries" | "settings";
+  onSectionChange?: (section: "dashboard" | "products" | "registrations" | "orders" | "inquiries" | "settings") => void;
   pendingRegistrationsCount?: number;
   pendingInquiriesCount?: number;
   unseenOrdersCount?: number;
@@ -14,7 +14,7 @@ interface AdminSidebarProps {
 }
 
 export default function AdminSidebar({
-  activeSection = "products",
+  activeSection = "dashboard",
   onSectionChange,
   pendingRegistrationsCount = 0,
   pendingInquiriesCount = 0,
@@ -23,6 +23,11 @@ export default function AdminSidebar({
   onClose,
 }: AdminSidebarProps) {
   const sections = [
+    {
+      id: "dashboard" as const,
+      label: "Дашборд",
+      icon: BarChart2,
+    },
     {
       id: "products" as const,
       label: "Товары",

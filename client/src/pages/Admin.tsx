@@ -12,10 +12,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useNotificationSound } from "@/hooks/useNotificationSound";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Plus, Trash2, Download, Upload, X, Menu } from "lucide-react";
+import { Plus, Trash2, Download, Upload, X, Menu, TrendingUp, TrendingDown, ShoppingBag, Users, AlertCircle, DollarSign } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { BusinessRegistration, Product, Order, InsertProduct, Customer, Settings } from "@shared/schema";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { exportProductsToCSV, importProductsFromCSV } from "@/lib/csvUtils";
@@ -36,19 +36,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend, BarChart, Bar,
+} from "recharts";
 
 export default function Admin() {
   const [location] = useLocation();
   const [activeSection, setActiveSection] = useState<
-    "products" | "registrations" | "orders" | "inquiries" | "settings"
+    "dashboard" | "products" | "registrations" | "orders" | "inquiries" | "settings"
   >(() => {
     // Parse section from URL query parameter
     const params = new URLSearchParams(window.location.search);
     const section = params.get("section");
-    if (section === "products" || section === "registrations" || section === "orders" || section === "inquiries" || section === "settings") {
+    if (section === "dashboard" || section === "products" || section === "registrations" || section === "orders" || section === "inquiries" || section === "settings") {
       return section;
     }
-    return "products";
+    return "dashboard";
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showProductForm, setShowProductForm] = useState(false);
@@ -61,11 +65,13 @@ export default function Admin() {
   const { play: playNotificationSound } = useNotificationSound();
   const prevCountsRef = useRef({ orders: 0, inquiries: 0 });
 
-  const handleSectionChange = (section: "products" | "registrations" | "orders" | "inquiries" | "settings") => {
+  const handleSectionChange = (section: "dashboard" | "products" | "registrations" | "orders" | "inquiries" | "settings") => {
     setActiveSection(section);
     setLocation(`/admin?section=${section}`);
     // Invalidate queries when switching sections to ensure fresh data
-    if (section === "products") {
+    if (section === "dashboard") {
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
+    } else if (section === "products") {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
     } else if (section === "registrations") {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
@@ -113,6 +119,13 @@ export default function Admin() {
   const { data: settings } = useQuery<Settings>({
     queryKey: ["/api/settings"],
     enabled: isAdmin,
+  });
+
+  // Fetch analytics
+  const { data: analytics, isLoading: analyticsLoading } = useQuery<any>({
+    queryKey: ["/api/analytics"],
+    enabled: isAdmin,
+    refetchInterval: 60000, // refresh every minute
   });
 
   const pendingCount = customers.filter((c) => c.status === "pending").length;
@@ -414,6 +427,7 @@ export default function Admin() {
             <Menu className="h-5 w-5" />
           </Button>
           <h1 className="text-xl md:text-2xl font-bold">
+            {activeSection === "dashboard" && "Дашборд"}
             {activeSection === "products" && "Управление товарами"}
             {activeSection === "registrations" && "Список клиентов"}
             {activeSection === "orders" && "Заказы"}
@@ -423,6 +437,166 @@ export default function Admin() {
         </header>
 
         <main className="flex-1 overflow-auto p-3 md:p-6">
+          {activeSection === "dashboard" && (
+            <div className="space-y-6">
+              {analyticsLoading ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
+                </div>
+              ) : analytics ? (
+                <>
+                  {/* KPI Cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <Card>
+                      <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Выручка (месяц)</CardTitle>
+                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{analytics.revenueThisMonth.toLocaleString('ru-RU')} ֏</div>
+                        <div className="flex items-center gap-1 mt-1 text-xs">
+                          {analytics.revenueThisMonth >= analytics.revenueLastMonth ? (
+                            <TrendingUp className="h-3 w-3 text-green-600" />
+                          ) : (
+                            <TrendingDown className="h-3 w-3 text-red-500" />
+                          )}
+                          <span className={analytics.revenueThisMonth >= analytics.revenueLastMonth ? "text-green-600" : "text-red-500"}>
+                            {analytics.revenueLastMonth > 0
+                              ? `${Math.abs(Math.round((analytics.revenueThisMonth - analytics.revenueLastMonth) / analytics.revenueLastMonth * 100))}% vs прошлый месяц`
+                              : "Нет данных за прошлый месяц"}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Всего заказов</CardTitle>
+                        <ShoppingBag className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{analytics.totalOrders}</div>
+                        <div className="text-xs text-muted-foreground mt-1">За всё время</div>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Клиентов</CardTitle>
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{analytics.totalCustomers}</div>
+                        <div className="text-xs text-muted-foreground mt-1">Зарегистрировано</div>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Задолженность</CardTitle>
+                        <AlertCircle className="h-4 w-4 text-red-500" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold text-red-600">{analytics.overdueTotal.toLocaleString('ru-RU')} ֏</div>
+                        <div className="text-xs text-muted-foreground mt-1">Просрочено (&gt;7 дней)</div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Revenue / Orders Chart */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">Заказы за 30 дней</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ResponsiveContainer width="100%" height={220}>
+                          <LineChart data={analytics.dailyOrders}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
+                            <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+                            <Tooltip
+                              formatter={(value: any) => [value, 'Заказов']}
+                              labelFormatter={(l) => `Дата: ${l}`}
+                            />
+                            <Line type="monotone" dataKey="orders" stroke="#1d4ed8" strokeWidth={2} dot={false} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">Выручка по типу клиента</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ResponsiveContainer width="100%" height={220}>
+                          <PieChart>
+                            <Pie
+                              data={analytics.revenueByType.filter((d: any) => d.value > 0)}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={50}
+                              outerRadius={80}
+                              dataKey="value"
+                              nameKey="type"
+                              label={({ type, percent }: any) => `${type} ${(percent * 100).toFixed(0)}%`}
+                              labelLine={false}
+                            >
+                              {analytics.revenueByType.map((_: any, index: number) => (
+                                <Cell key={index} fill={["#1d4ed8", "#16a34a", "#ea580c"][index % 3]} />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(v: any) => `${v.toLocaleString('ru-RU')} ֏`} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Top Customers & Products */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">Топ-5 клиентов по выручке</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ResponsiveContainer width="100%" height={200}>
+                          <BarChart data={analytics.topCustomers} layout="vertical">
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                            <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={100} />
+                            <Tooltip formatter={(v: any) => `${v.toLocaleString('ru-RU')} ֏`} />
+                            <Bar dataKey="revenue" fill="#1d4ed8" radius={[0, 4, 4, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">Топ-5 товаров по выручке</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ResponsiveContainer width="100%" height={200}>
+                          <BarChart data={analytics.topProducts} layout="vertical">
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                            <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={120} />
+                            <Tooltip formatter={(v: any) => `${v.toLocaleString('ru-RU')} ֏`} />
+                            <Bar dataKey="revenue" fill="#16a34a" radius={[0, 4, 4, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-16 text-muted-foreground">Нет данных для отображения</div>
+              )}
+            </div>
+          )}
+
           {activeSection === "products" && (
             <div className="space-y-6">
               {!showProductForm && (

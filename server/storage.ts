@@ -2,6 +2,7 @@ import {
   customers,
   products,
   orders,
+  orderComments,
   settings,
   inquiries,
   offers,
@@ -11,6 +12,8 @@ import {
   type InsertProduct,
   type Order,
   type InsertOrder,
+  type OrderComment,
+  type InsertOrderComment,
   type Settings,
   type InsertSettings,
   type Inquiry,
@@ -62,6 +65,10 @@ export interface IStorage {
   markOrderAsSeen(id: string): Promise<Order>;
   markOrderAsAdminSeen(id: string): Promise<Order>;
   deleteOrder(id: string): Promise<void>; // Added deleteOrder method
+
+  // Order comment operations
+  getOrderComments(orderId: string): Promise<OrderComment[]>;
+  addOrderComment(comment: InsertOrderComment): Promise<OrderComment>;
 
   // Cart operations
   getCart(customerId: string): Promise<any[]>;
@@ -417,6 +424,20 @@ export class DatabaseStorage implements IStorage {
 
   async deleteOrder(id: string): Promise<void> {
     await db.delete(orders).where(eq(orders.id, id));
+  }
+
+  // Order comment operations
+  async getOrderComments(orderId: string): Promise<OrderComment[]> {
+    return db
+      .select()
+      .from(orderComments)
+      .where(eq(orderComments.orderId, orderId))
+      .orderBy(orderComments.createdAt);
+  }
+
+  async addOrderComment(comment: InsertOrderComment): Promise<OrderComment> {
+    const [created] = await db.insert(orderComments).values(comment).returning();
+    return created;
   }
 
   // Cart operations

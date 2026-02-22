@@ -1,6 +1,6 @@
 import { db, pool } from "./db";
-import { customers } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { customers, orders } from "@shared/schema";
+import { eq, lt, and, ne } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
 export async function runStartupTasks() {
@@ -10,8 +10,71 @@ export async function runStartupTasks() {
     await ensureTablesExist();
     await seedAdminIfNeeded();
     console.log("[STARTUP] All startup tasks completed successfully.");
+    scheduleOverdueReminders();
   } catch (err) {
     console.error("[STARTUP] Error during startup tasks:", err);
+  }
+}
+
+function scheduleOverdueReminders() {
+  const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+  // Run once after 1 minute delay, then every 24 hours
+  setTimeout(async () => {
+    await sendOverdueReminders();
+    setInterval(sendOverdueReminders, TWENTY_FOUR_HOURS);
+  }, 60 * 1000);
+  console.log("[STARTUP] Overdue reminder scheduler started (runs daily).");
+}
+
+async function sendOverdueReminders() {
+  try {
+    console.log("[OVERDUE] Checking for overdue payments...");
+    const { sendOverdueReminderEmail } = await import("./email.js");
+
+    // Find orders older than 7 days with unpaid or partial payment
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const overdueOrders = await db
+      .select()
+      .from(orders)
+      .where(
+        and(
+          ne(orders.paymentStatus, "paid"),
+          lt(orders.createdAt, sevenDaysAgo)
+        )
+      );
+
+    if (overdueOrders.length === 0) {
+      console.log("[OVERDUE] No overdue orders found.");
+      return;
+    }
+
+    // Group overdue orders by customer
+    const byCustomer = new Map<string, typeof overdueOrders>();
+    for (const order of overdueOrders) {
+      const list = byCustomer.get(order.customerId) ?? [];
+      list.push(order);
+      byCustomer.set(order.customerId, list);
+    }
+
+    for (const [customerId, customerOrders] of Array.from(byCustomer)) {
+      const customer = await db
+        .select()
+        .from(customers)
+        .where(eq(customers.id, customerId))
+        .limit(1)
+        .then(r => r[0]);
+
+      if (!customer || customer.role === 'admin') continue;
+
+      await sendOverdueReminderEmail(customer, customerOrders).catch(err =>
+        console.error(`[OVERDUE] Failed to send reminder to ${customer.email}:`, err)
+      );
+    }
+
+    console.log(`[OVERDUE] Sent reminders to ${byCustomer.size} customer(s).`);
+  } catch (err) {
+    console.error("[OVERDUE] Error in overdue reminder job:", err);
   }
 }
 
@@ -176,6 +239,19 @@ async function createTablesManually() {
       token VARCHAR(255) NOT NULL UNIQUE,
       expires_at TIMESTAMP NOT NULL,
       used BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS order_comments (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      order_id VARCHAR NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      author_id VARCHAR NOT NULL,
+      author_role VARCHAR(20) NOT NULL,
+      author_name VARCHAR(255) NOT NULL,
+      message TEXT NOT NULL,
+      is_internal BOOLEAN NOT NULL DEFAULT false,
       created_at TIMESTAMP DEFAULT NOW()
     );
   `);

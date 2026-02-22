@@ -13,11 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Calendar, Trash2 } from "lucide-react";
+import { ArrowLeft, Calendar, Trash2, Download, Send, Lock } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import type { Order, Product } from "@shared/schema";
-import { useState } from "react";
+import type { Order, Product, OrderComment } from "@shared/schema";
+import { useState, useRef, useEffect } from "react";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 
 interface OrderWithCustomer extends Order {
   customerName: string;
@@ -35,6 +37,9 @@ export default function OrderDetail() {
   const [editableItems, setEditableItems] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
+  const [newComment, setNewComment] = useState("");
+  const [isInternal, setIsInternal] = useState(false);
+  const commentsEndRef = useRef<HTMLDivElement>(null);
 
   const { data: order, isLoading: isLoadingOrder } = useQuery<OrderWithCustomer>({
     queryKey: [`/api/orders/${params?.id}`],
@@ -44,6 +49,12 @@ export default function OrderDetail() {
 
   const { data: products = [], isLoading: isLoadingProducts } = useQuery<Product[]>({
     queryKey: ["/api/products"],
+  });
+
+  const { data: comments = [], isLoading: isLoadingComments } = useQuery<OrderComment[]>({
+    queryKey: [`/api/orders/${params?.id}/comments`],
+    enabled: !!params?.id,
+    refetchInterval: 10000,
   });
 
   const isLoading = isLoadingOrder || isLoadingProducts;
@@ -165,6 +176,28 @@ export default function OrderDetail() {
     },
   });
 
+  // Add comment mutation
+  const addCommentMutation = useMutation({
+    mutationFn: async ({ message, isInternal }: { message: string; isInternal: boolean }) => {
+      const response = await fetch(`/api/orders/${params?.id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ message, isInternal }),
+      });
+      if (!response.ok) throw new Error("Failed to add comment");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/orders/${params?.id}/comments`] });
+      setNewComment("");
+      setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+    },
+    onError: () => {
+      toast({ title: "Ошибка", description: "Не удалось добавить комментарий", variant: "destructive" });
+    },
+  });
+
   const getPaymentStatusBadge = (status: string) => {
     switch (status) {
       case "paid":
@@ -244,15 +277,28 @@ export default function OrderDetail() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Заказ #{order.orderNumber}</CardTitle>
-          <div className="text-sm text-muted-foreground">
-            {new Date(order.createdAt!).toLocaleDateString("ru-RU", {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle>Заказ #{order.orderNumber}</CardTitle>
+              <div className="text-sm text-muted-foreground mt-1">
+                {new Date(order.createdAt!).toLocaleDateString("ru-RU", {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.open(`/api/orders/${order.id}/pdf`, "_blank")}
+              data-testid="button-download-invoice"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Накладная PDF
+            </Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -318,7 +364,7 @@ export default function OrderDetail() {
                     <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       type="date"
-                      value={deliveryDate || order.deliveryDate || ""}
+                      value={deliveryDate || (order.deliveryDate ? new Date(order.deliveryDate).toISOString().slice(0, 10) : "")}
                       onChange={(e) => setDeliveryDate(e.target.value)}
                       className="pl-10"
                     />
@@ -510,10 +556,93 @@ export default function OrderDetail() {
           <div className="flex justify-between items-center pt-4 border-t">
             <span className="text-lg font-semibold">Итого:</span>
             <span className="text-2xl font-bold">
-              {isAdmin && isEditingItems 
+              {isAdmin && isEditingItems
                 ? (editableItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)).toLocaleString()
                 : order.total.toLocaleString()} ֏
             </span>
+          </div>
+
+          {/* ── Comments Section ── */}
+          <div className="pt-4 border-t space-y-4">
+            <h3 className="font-semibold">Комментарии</h3>
+
+            {/* Comments list */}
+            <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+              {isLoadingComments ? (
+                <Skeleton className="h-16 w-full" />
+              ) : comments.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">Комментариев пока нет</p>
+              ) : (
+                comments.map((c) => (
+                  <div
+                    key={c.id}
+                    className={`rounded-lg p-3 text-sm ${
+                      c.isInternal
+                        ? "bg-amber-50 border border-amber-200"
+                        : c.authorRole === "admin"
+                        ? "bg-blue-50 border border-blue-200 ml-8"
+                        : "bg-gray-50 border border-gray-200 mr-8"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-semibold text-xs">{c.authorName}</span>
+                      {c.isInternal && (
+                        <span className="flex items-center gap-1 text-amber-700 text-xs">
+                          <Lock className="h-3 w-3" /> Внутренняя заметка
+                        </span>
+                      )}
+                      <span className="text-muted-foreground text-xs ml-auto">
+                        {new Date(c.createdAt!).toLocaleString("ru-RU", {
+                          day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"
+                        })}
+                      </span>
+                    </div>
+                    <p className="whitespace-pre-wrap">{c.message}</p>
+                  </div>
+                ))
+              )}
+              <div ref={commentsEndRef} />
+            </div>
+
+            {/* New comment input */}
+            <div className="space-y-2">
+              <Textarea
+                placeholder="Написать комментарий..."
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                rows={3}
+                data-testid="input-comment"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && newComment.trim()) {
+                    addCommentMutation.mutate({ message: newComment.trim(), isInternal });
+                  }
+                }}
+              />
+              <div className="flex items-center justify-between">
+                {isAdmin && (
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="internal-switch"
+                      checked={isInternal}
+                      onCheckedChange={setIsInternal}
+                    />
+                    <label htmlFor="internal-switch" className="text-sm text-muted-foreground cursor-pointer">
+                      Внутренняя заметка
+                    </label>
+                  </div>
+                )}
+                <Button
+                  size="sm"
+                  className="ml-auto"
+                  disabled={!newComment.trim() || addCommentMutation.isPending}
+                  onClick={() => addCommentMutation.mutate({ message: newComment.trim(), isInternal })}
+                  data-testid="button-send-comment"
+                >
+                  <Send className="mr-2 h-4 w-4" />
+                  Отправить
+                </Button>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
