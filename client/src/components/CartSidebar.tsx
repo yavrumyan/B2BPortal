@@ -104,7 +104,7 @@ export default function CartSidebar({
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-6 w-6"
+                              className="h-9 w-9"
                               onClick={() => {
                                 const newQty = item.quantity - 1;
                                 const minQty = item.moq || 1;
@@ -117,11 +117,11 @@ export default function CartSidebar({
                             >
                               −
                             </Button>
-                            <div className="w-6 text-center text-xs font-semibold">{item.quantity}</div>
+                            <div className="w-8 text-center text-sm font-semibold">{item.quantity}</div>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-6 w-6"
+                              className="h-9 w-9"
                               onClick={() => {
                                 const newQty = item.quantity + 1;
                                 const maxQty = item.stock || Infinity;

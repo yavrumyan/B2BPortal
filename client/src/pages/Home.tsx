@@ -1008,7 +1008,7 @@ export default function Home() {
               {/* Filters */}
               <Card className="mb-6">
                 <CardContent className="pt-6 space-y-4">
-                  <div className="flex flex-wrap gap-4 items-end">
+                  <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-4 items-end">
                     {/* Price Range Filter */}
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Цена (мин)</label>
@@ -1018,7 +1018,7 @@ export default function Home() {
                         value={minPrice}
                         onChange={(e) => setMinPrice(e.target.value)}
                         data-testid="input-filter-min-price"
-                        className="w-32"
+                        className="w-full sm:w-32"
                       />
                     </div>
                     <div className="space-y-2">
@@ -1029,7 +1029,7 @@ export default function Home() {
                         value={maxPrice}
                         onChange={(e) => setMaxPrice(e.target.value)}
                         data-testid="input-filter-max-price"
-                        className="w-32"
+                        className="w-full sm:w-32"
                       />
                     </div>
 
@@ -1037,7 +1037,7 @@ export default function Home() {
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Статус</label>
                       <Select value={statusFilter || "all"} onValueChange={(value) => setStatusFilter(value === "all" ? "" : value)}>
-                        <SelectTrigger data-testid="select-filter-status" className="w-40">
+                        <SelectTrigger data-testid="select-filter-status" className="w-full sm:w-40">
                           <SelectValue placeholder="Все статусы" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1054,7 +1054,7 @@ export default function Home() {
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Срок доставки</label>
                       <Select value={deliveryTimeFilter || "all"} onValueChange={(value) => setDeliveryTimeFilter(value === "all" ? "" : value)}>
-                        <SelectTrigger data-testid="select-filter-delivery-time" className="w-40">
+                        <SelectTrigger data-testid="select-filter-delivery-time" className="w-full sm:w-40">
                           <SelectValue placeholder="Все сроки" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1075,7 +1075,7 @@ export default function Home() {
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Бренд</label>
                       <Select value={brandFilter || "all"} onValueChange={(value) => setBrandFilter(value === "all" ? "" : value)}>
-                        <SelectTrigger data-testid="select-filter-brand" className="w-40">
+                        <SelectTrigger data-testid="select-filter-brand" className="w-full sm:w-40">
                           <SelectValue placeholder="Все бренды" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1095,7 +1095,7 @@ export default function Home() {
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Категория</label>
                       <Select value={categoryFilter || "all"} onValueChange={(value) => setCategoryFilter(value === "all" ? "" : value)}>
-                        <SelectTrigger data-testid="select-filter-category" className="w-40">
+                        <SelectTrigger data-testid="select-filter-category" className="w-full sm:w-40">
                           <SelectValue placeholder="Все категории" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1122,7 +1122,7 @@ export default function Home() {
                         setCategoryFilter("");
                       }}
                       data-testid="button-clear-filters"
-                      className="bg-black hover:bg-black/80 text-white"
+                      className="bg-black hover:bg-black/80 text-white self-end"
                       title="Очистить все фильтры"
                     >
                       <X className="h-4 w-4" />
