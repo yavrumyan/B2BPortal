@@ -344,35 +344,37 @@ export default function ProductListTable({
                 className="mb-1 font-medium"
                 data-testid={`input-edit-name-${product.id}`}
               />
-              <Input
-                value={getEditedValue(product.id, "sku", product.sku || "")}
-                onChange={(e) => handleFieldChange(product.id, "sku", e.target.value)}
-                placeholder="Артикул"
-                className="text-xs mb-1"
-                data-testid={`input-edit-sku-${product.id}`}
-              />
-              <Input
-                value={getEditedValue(product.id, "brand", product.brand || "")}
-                onChange={(e) => handleFieldChange(product.id, "brand", e.target.value)}
-                placeholder="Бренд"
-                className="text-xs mb-1"
-                data-testid={`input-edit-brand-${product.id}`}
-              />
-              <Select
-                value={getEditedValue(product.id, "category", product.category || "")}
-                onValueChange={(value) => handleFieldChange(product.id, "category", value)}
-              >
-                <SelectTrigger className="text-xs" data-testid={`select-edit-category-${product.id}`}>
-                  <SelectValue placeholder="Категория" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex gap-1">
+                <Input
+                  value={getEditedValue(product.id, "sku", product.sku || "")}
+                  onChange={(e) => handleFieldChange(product.id, "sku", e.target.value)}
+                  placeholder="Артикул"
+                  className="text-xs flex-1 min-w-0"
+                  data-testid={`input-edit-sku-${product.id}`}
+                />
+                <Input
+                  value={getEditedValue(product.id, "brand", product.brand || "")}
+                  onChange={(e) => handleFieldChange(product.id, "brand", e.target.value)}
+                  placeholder="Бренд"
+                  className="text-xs flex-1 min-w-0"
+                  data-testid={`input-edit-brand-${product.id}`}
+                />
+                <Select
+                  value={getEditedValue(product.id, "category", product.category || "")}
+                  onValueChange={(value) => handleFieldChange(product.id, "category", value)}
+                >
+                  <SelectTrigger className="text-xs flex-1 min-w-0 h-9" data-testid={`select-edit-category-${product.id}`}>
+                    <SelectValue placeholder="Категория" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {cat}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </>
           ) : (
             <>
