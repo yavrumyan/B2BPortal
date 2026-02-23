@@ -154,7 +154,7 @@ export function generateInvoicePDF(
       .strokeColor(BRAND_COLOR).lineWidth(1).stroke();
 
     doc.font('Regular').fontSize(10).fillColor(DARK_GRAY);
-    doc.text('Получатель: ԱՁ Սalбина Аleksanyаn', 40, payY + 24);
+    doc.text('Получатель: ԱՁ Սալբինա Ալեքսանյան', 40, payY + 24);
     doc.text('Банк: Ամերիաբանկ ՓԲԸ', 40, payY + 40);
     doc.text('Счёт: 1570065472180100', 40, payY + 56);
 
