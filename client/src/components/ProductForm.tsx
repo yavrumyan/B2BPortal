@@ -25,7 +25,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const productSchema = z.object({
   name: z.string().min(2, "Введите название товара"),
-  sku: z.string().optional(),
+  sku: z.string().min(1, "Введите артикул"),
+  brand: z.string().optional(),
   price: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
     message: "Введите корректную цену",
   }),
@@ -33,6 +34,7 @@ const productSchema = z.object({
     message: "Введите корректное количество",
   }),
   stock: z.enum(["in_stock", "low_stock", "out_of_stock", "on_order"]),
+  moq: z.string().optional(),
   eta: z.string().optional(),
   description: z.string().optional(),
   visibleCustomerTypes: z.array(z.string()).optional(),
@@ -55,8 +57,10 @@ export default function ProductForm({ onSubmit, onCancel }: ProductFormProps) {
     defaultValues: {
       name: "",
       sku: "",
+      brand: "",
       price: "",
       availableQuantity: "",
+      moq: "",
       stock: "in_stock",
       eta: "1-2 дня",
       description: "",
@@ -71,6 +75,7 @@ export default function ProductForm({ onSubmit, onCancel }: ProductFormProps) {
       ...data,
       price: Number(data.price),
       availableQuantity: Number(data.availableQuantity),
+      moq: data.moq ? Number(data.moq) : undefined,
       visibleCustomerTypes: selectedTypes.length > 0 ? selectedTypes : undefined,
     };
     console.log("Product data:", productData);
@@ -114,7 +119,7 @@ export default function ProductForm({ onSubmit, onCancel }: ProductFormProps) {
                 name="sku"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Артикул</FormLabel>
+                    <FormLabel>Артикул *</FormLabel>
                     <FormControl>
                       <Input
                         placeholder="HP-PAV-15-001"
@@ -127,6 +132,26 @@ export default function ProductForm({ onSubmit, onCancel }: ProductFormProps) {
                 )}
               />
 
+              <FormField
+                control={form.control}
+                name="brand"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Бренд</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="HP"
+                        {...field}
+                        data-testid="input-product-brand"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
               <FormField
                 control={form.control}
                 name="price"
@@ -145,20 +170,39 @@ export default function ProductForm({ onSubmit, onCancel }: ProductFormProps) {
                   </FormItem>
                 )}
               />
+
+              <FormField
+                control={form.control}
+                name="availableQuantity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Доступное количество *</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        placeholder="10"
+                        {...field}
+                        data-testid="input-product-available-quantity"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
             <FormField
               control={form.control}
-              name="availableQuantity"
+              name="moq"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Доступное количество *</FormLabel>
+                  <FormLabel>МОК (минимальный объём заказа)</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
-                      placeholder="10"
+                      placeholder="1"
                       {...field}
-                      data-testid="input-product-available-quantity"
+                      data-testid="input-product-moq"
                     />
                   </FormControl>
                   <FormMessage />
