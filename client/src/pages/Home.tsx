@@ -413,24 +413,6 @@ export default function Home() {
   const [brandFilter, setBrandFilter] = useState<string>("");
   const [categoryFilter, setCategoryFilter] = useState<string>("");
 
-  const filteredProductIds = useMemo(() => {
-    return products.filter((product) => {
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        if (!product.name.toLowerCase().includes(query) &&
-            !(product.sku && product.sku.toLowerCase().includes(query))) return false;
-      }
-      const min = minPrice ? parseInt(minPrice) : 0;
-      const max = maxPrice ? parseInt(maxPrice) : Infinity;
-      if (product.price < min || product.price > max) return false;
-      if (statusFilter && product.stock !== statusFilter) return false;
-      if (deliveryTimeFilter && product.eta !== deliveryTimeFilter) return false;
-      if (brandFilter && product.brand !== brandFilter) return false;
-      if (categoryFilter && product.category !== categoryFilter) return false;
-      return true;
-    }).map((p) => p.id);
-  }, [products, searchQuery, minPrice, maxPrice, statusFilter, deliveryTimeFilter, brandFilter, categoryFilter]);
-
   const { play: playNotificationSound } = useNotificationSound();
   const prevCountsRef = useRef({ orders: 0, inquiries: 0 });
 
@@ -491,6 +473,24 @@ export default function Home() {
   const { data: products = [], isLoading } = useQuery<Product[]>({
     queryKey: ["/api/products"],
   });
+
+  const filteredProductIds = useMemo(() => {
+    return products.filter((product) => {
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        if (!product.name.toLowerCase().includes(query) &&
+            !(product.sku && product.sku.toLowerCase().includes(query))) return false;
+      }
+      const min = minPrice ? parseInt(minPrice) : 0;
+      const max = maxPrice ? parseInt(maxPrice) : Infinity;
+      if (product.price < min || product.price > max) return false;
+      if (statusFilter && product.stock !== statusFilter) return false;
+      if (deliveryTimeFilter && product.eta !== deliveryTimeFilter) return false;
+      if (brandFilter && product.brand !== brandFilter) return false;
+      if (categoryFilter && product.category !== categoryFilter) return false;
+      return true;
+    }).map((p) => p.id);
+  }, [products, searchQuery, minPrice, maxPrice, statusFilter, deliveryTimeFilter, brandFilter, categoryFilter]);
 
   const { data: settings } = useQuery<Settings>({
     queryKey: ["/api/settings"],
