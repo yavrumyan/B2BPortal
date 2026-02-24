@@ -208,6 +208,11 @@ export default function ProductListTable({
                 {product.sku}
               </div>
             )}
+            {product.brand && (
+              <div className="text-xs text-muted-foreground" data-testid={`text-brand-${product.id}`}>
+                {product.brand}
+              </div>
+            )}
           </div>
           <div className="text-right shrink-0">
             <div className="font-semibold text-sm" data-testid={`text-price-${product.id}`}>
@@ -271,7 +276,7 @@ export default function ProductListTable({
   const renderDesktopTable = () => (
     <div className="overflow-x-auto">
       <div className="min-w-full">
-        <div className={`sticky top-0 z-10 grid ${adminMode ? 'grid-cols-[1fr_120px_120px_120px_80px_100px_120px]' : 'grid-cols-[1fr_120px_120px_120px_80px_140px_100px]'} gap-4 border-b bg-muted/50 px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground`}>
+        <div className={`sticky top-0 z-10 grid ${adminMode ? 'grid-cols-[1fr_120px_120px_120px_80px_100px_120px]' : 'grid-cols-[1fr_100px_120px_120px_120px_80px_140px_100px]'} gap-4 border-b bg-muted/50 px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground`}>
           <div
             onClick={() => handleSort("name")}
             className="cursor-pointer hover-elevate p-1 -m-1 rounded flex items-center gap-1"
@@ -282,6 +287,7 @@ export default function ProductListTable({
               sortOrder === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
             )}
           </div>
+          {!adminMode && <div>Бренд</div>}
           <div
             onClick={() => handleSort("price")}
             className="cursor-pointer hover-elevate p-1 -m-1 rounded flex items-center gap-1"
@@ -330,7 +336,7 @@ export default function ProductListTable({
           return (
           <div
             key={product.id}
-            className={`grid ${adminMode ? 'grid-cols-[1fr_120px_120px_120px_80px_100px_120px]' : 'grid-cols-[1fr_120px_120px_120px_80px_140px_100px]'} gap-4 border-b px-4 py-3 hover-elevate ${
+            className={`grid ${adminMode ? 'grid-cols-[1fr_120px_120px_120px_80px_100px_120px]' : 'grid-cols-[1fr_100px_120px_120px_120px_80px_140px_100px]'} gap-4 border-b px-4 py-3 hover-elevate ${
               index % 2 === 0 ? "bg-background" : "bg-muted/20"
             }`}
             data-testid={`product-row-${product.id}`}
@@ -389,6 +395,14 @@ export default function ProductListTable({
             </>
           )}
         </div>
+
+        {!adminMode && (
+          <div className="flex items-center">
+            <div className="text-sm text-muted-foreground" data-testid={`text-brand-${product.id}`}>
+              {product.brand || "—"}
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center">
           {adminMode ? (
