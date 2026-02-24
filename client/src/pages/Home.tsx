@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronDown, ChevronUp, X, ShoppingCart, ImagePlus, Menu } from "lucide-react";
+import { ChevronDown, ChevronUp, X, ShoppingCart, ImagePlus, Menu, Check } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 
 const categories = [
@@ -149,31 +149,52 @@ function CustomerInquiriesSection({
                         ))}
                       </select>
                     </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const input = document.createElement('input');
-                        input.type = 'file';
-                        input.accept = 'image/*';
-                        input.onchange = (e: any) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const newProducts = [...formData.productsRequested];
-                            newProducts[idx].image = file;
-                            setFormData({...formData, productsRequested: newProducts});
-                            toast({ title: "Фото загружено" });
-                          }
-                        };
-                        input.click();
-                      }}
-                      className="whitespace-nowrap"
-                      data-testid={`button-upload-image-${idx}`}
-                    >
-                      <ImagePlus className="h-4 w-4 mr-2" />
-                      Фото
-                    </Button>
+                    <div className="flex flex-col items-end gap-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*';
+                          input.onchange = (e: any) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const newProducts = [...formData.productsRequested];
+                              newProducts[idx].image = file;
+                              setFormData({...formData, productsRequested: newProducts});
+                            }
+                          };
+                          input.click();
+                        }}
+                        className={`whitespace-nowrap ${product.image ? 'border-green-500 text-green-700 hover:border-green-600' : ''}`}
+                        data-testid={`button-upload-image-${idx}`}
+                      >
+                        {product.image
+                          ? <Check className="h-4 w-4 mr-2" />
+                          : <ImagePlus className="h-4 w-4 mr-2" />
+                        }
+                        Фото
+                      </Button>
+                      {product.image && (
+                        <div className="flex items-center gap-1 text-xs text-green-700 max-w-[120px]">
+                          <span className="truncate">{product.image.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newProducts = [...formData.productsRequested];
+                              newProducts[idx].image = null;
+                              setFormData({...formData, productsRequested: newProducts});
+                            }}
+                            className="shrink-0 text-muted-foreground hover:text-destructive"
+                            data-testid={`button-remove-image-${idx}`}
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     {formData.productsRequested.length > 1 && (
                       <Button
                         type="button"
