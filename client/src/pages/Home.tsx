@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import Header from "@/components/Header";
@@ -412,6 +412,25 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [brandFilter, setBrandFilter] = useState<string>("");
   const [categoryFilter, setCategoryFilter] = useState<string>("");
+
+  const filteredProductIds = useMemo(() => {
+    return products.filter((product) => {
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        if (!product.name.toLowerCase().includes(query) &&
+            !(product.sku && product.sku.toLowerCase().includes(query))) return false;
+      }
+      const min = minPrice ? parseInt(minPrice) : 0;
+      const max = maxPrice ? parseInt(maxPrice) : Infinity;
+      if (product.price < min || product.price > max) return false;
+      if (statusFilter && product.stock !== statusFilter) return false;
+      if (deliveryTimeFilter && product.eta !== deliveryTimeFilter) return false;
+      if (brandFilter && product.brand !== brandFilter) return false;
+      if (categoryFilter && product.category !== categoryFilter) return false;
+      return true;
+    }).map((p) => p.id);
+  }, [products, searchQuery, minPrice, maxPrice, statusFilter, deliveryTimeFilter, brandFilter, categoryFilter]);
+
   const { play: playNotificationSound } = useNotificationSound();
   const prevCountsRef = useRef({ orders: 0, inquiries: 0 });
 
@@ -1017,7 +1036,12 @@ export default function Home() {
                     variant="outline"
                     size="sm"
                     className="ml-auto"
-                    onClick={() => window.open("/api/price-list/pdf", "_blank")}
+                    onClick={() => {
+                      const url = filteredProductIds.length < products.length
+                        ? `/api/price-list/pdf?ids=${filteredProductIds.join(',')}`
+                        : '/api/price-list/pdf';
+                      window.open(url, "_blank");
+                    }}
                     data-testid="button-download-price-list"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>

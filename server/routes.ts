@@ -1205,7 +1205,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const customer = await storage.getCustomerById(req.session.customerId!);
       if (!customer) return res.status(401).json({ message: "Unauthorized" });
 
-      const products = await storage.getProducts();
+      let products = await storage.getProducts();
+      const idsParam = req.query.ids as string | undefined;
+      if (idsParam) {
+        const ids = idsParam.split(',').filter(Boolean);
+        products = products.filter((p) => ids.includes(p.id));
+      }
       const settings = await storage.getSettings();
 
       const pdfBuffer = await generatePriceListPDF(customer, products, settings);
