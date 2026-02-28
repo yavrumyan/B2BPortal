@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ShoppingCart, Plus, Minus, X, Save, ArrowUp, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,11 @@ export default function ProductListTable({
   const [searchTerm, setSearchTerm] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+
+  // Reset to page 1 whenever the search term changes
+  useEffect(() => { setCurrentPage(1); }, [searchTerm]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -93,6 +98,12 @@ export default function ProductListTable({
   };
 
   const filteredProducts = getSortedAndFilteredProducts();
+  const totalItems = filteredProducts.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const pagedProducts = filteredProducts.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
 
   const CATEGORIES = [
     "Ноутбуки",
@@ -276,7 +287,7 @@ export default function ProductListTable({
   const renderDesktopTable = () => (
     <div className="overflow-x-auto">
       <div className="min-w-full">
-        <div className={`sticky top-0 z-10 grid ${adminMode ? 'grid-cols-[1fr_120px_120px_120px_80px_100px_120px]' : 'grid-cols-[1fr_100px_120px_120px_120px_80px_140px_100px]'} gap-4 border-b bg-muted/50 px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground`}>
+        <div className={`sticky top-0 z-10 grid items-center ${adminMode ? 'grid-cols-[1fr_120px_120px_120px_80px_100px_120px]' : 'grid-cols-[1fr_100px_120px_120px_120px_80px_140px_100px]'} gap-4 border-b bg-muted/50 px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground`}>
           <div
             onClick={() => handleSort("name")}
             className="cursor-pointer hover-elevate p-1 -m-1 rounded flex items-center gap-1"
@@ -332,7 +343,7 @@ export default function ProductListTable({
           )}
         </div>
 
-        {filteredProducts.map((product, index) => {
+        {pagedProducts.map((product, index) => {
           return (
           <div
             key={product.id}
@@ -584,14 +595,16 @@ export default function ProductListTable({
         <div className="text-center text-muted-foreground py-8">
           {searchTerm ? "Товары не найдены" : "Нет товаров"}
         </div>
-      ) : adminMode ? (
-        renderDesktopTable()
       ) : (
         <>
-          <div className="hidden md:block">
-            {renderDesktopTable()}
-          </div>
-          <div className="md:hidden">
+          {adminMode ? (
+            renderDesktopTable()
+          ) : (
+            <>
+              <div className="hidden md:block">
+                {renderDesktopTable()}
+              </div>
+              <div className="md:hidden">
             <div className="flex gap-2 px-3 py-2 border-b bg-muted/50 flex-wrap">
               <Button
                 variant="ghost"
@@ -621,7 +634,44 @@ export default function ProductListTable({
                 Статус {sortKey === "stock" && (sortOrder === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />)}
               </Button>
             </div>
-            {filteredProducts.map((product) => renderMobileProductCard(product))}
+            {pagedProducts.map((product) => renderMobileProductCard(product))}
+              </div>
+            </>
+          )}
+
+          {/* ── Pagination bar ── */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span>Строк на странице:</span>
+              <Select
+                value={String(pageSize)}
+                onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}
+              >
+                <SelectTrigger className="h-8 w-20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <span>
+              {totalItems === 0
+                ? "0"
+                : `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, totalItems)}`
+              }{" из "}{totalItems}
+            </span>
+
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>«</Button>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1}>‹</Button>
+              <span className="px-2">Стр. {currentPage} из {totalPages}</span>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage === totalPages}>›</Button>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}>»</Button>
+            </div>
           </div>
         </>
       )}

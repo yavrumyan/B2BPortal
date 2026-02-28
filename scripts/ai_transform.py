@@ -116,8 +116,8 @@ _client = genai.Client(api_key=GEMINI_API_KEY)
 
 SYSTEM_PROMPT = f"""You are a product data normaliser for an IT products B2B portal.
 You will receive a JSON array of raw product records and must return a JSON array
-(same length, same order) where each object has exactly these three fields:
-  "name", "sku", "category"
+(same length, same order) where each object has exactly these four fields:
+  "name", "sku", "category", "brand"
 
 ══════════════════════════════════════════════════
 NAME FORMAT
@@ -141,8 +141,8 @@ Examples by product type:
   HDD Video:      HDD Seagate SkyHawk | 1TB | 3.5" SATA III | Surveillance
   RAM DDR4:       RAM Kingston ValueRAM | 16GB | DDR4-3200 | SODIMM | CL22
   RAM Server:     RAM Kingston | 32GB | DDR5-4800 | ECC RDIMM
-  CPU Consumer:   Processor AMD Ryzen 5 9600X | 6-Core | AM5 | 3.9GHz | 65W
-  CPU Server:     Processor Intel Xeon Silver 4310 | 12-Core | LGA4189 | 2.1GHz
+  CPU Consumer:   CPU AMD Ryzen 5 9600X | 6-Core | AM5 | 3.9GHz | 65W
+  CPU Server:     CPU Intel Xeon Silver 4310 | 12-Core | LGA4189 | 2.1GHz
   GPU:            GPU NVIDIA GeForce RTX 4060 | 8GB GDDR6 | PCIe 4.0
   Motherboard:    Motherboard ASUS ROG Strix B650E-F | AM5 | ATX | DDR5 | Wi-Fi 6E
   PSU:            PSU Corsair RM850x | 850W | 80+ Gold | Modular
@@ -190,9 +190,29 @@ SKU FORMAT
 • Keep the core alphanumeric identifier
 
 ══════════════════════════════════════════════════
+BRAND FORMAT
+══════════════════════════════════════════════════
+• Return the canonical manufacturer brand name (e.g. "Kingston", "Samsung", "HP")
+• Use the input "brand" field if it already looks like a valid brand name
+• If the input brand is clearly wrong (e.g. a memory size like "16GB", a number, or a
+  spec value), infer the correct brand from the model number or product name instead
+• Common model-number brand prefixes to recognise:
+    KVR / KSM         → Kingston
+    MZ / MZ-V / MZ-77 → Samsung
+    CT / BX / MX      → Crucial
+    ST / STJL         → Seagate
+    WD / WDS / WDBU   → Western Digital
+    CP5               → Corsair
+    GV                → Gigabyte
+    PS                → Patriot
+• Return empty string "" only if you truly cannot determine the brand
+
+══════════════════════════════════════════════════
 CATEGORY MAPPING
 ══════════════════════════════════════════════════
-Assign exactly one category from this list (copy Cyrillic exactly):
+Assign exactly one category from this list (copy Cyrillic exactly).
+If no category fits, leave it as an empty string — do NOT invent a new category.
+
 {json.dumps(CATEGORIES, ensure_ascii=False, indent=2)}
 
 Mapping rules:
@@ -202,6 +222,11 @@ Mapping rules:
   Телефоны              → Smartphones, feature phones, IP/SIP phones, conference phones
   Планшеты              → Tablets, e-readers, 2-in-1 tablets
   Компоненты ПК/Серверов → CPUs, GPUs, RAM, motherboards, PSUs, PC cases, cooling,
+                           internal HDDs (2.5"/3.5" SATA/SAS — including NAS-optimised
+                           variants e.g. Seagate IronWolf/IronWolf Pro, WD Red/Red Pro,
+                           and surveillance variants e.g. Seagate SkyHawk, WD Purple/
+                           Purple Pro — these are bare internal drives, not storage devices),
+                           internal SSDs (M.2, NVMe, 2.5" SATA/NVMe, U.2),
                            server components (HBAs, RAID cards, NICs, riser cards),
                            optical drives, batteries for laptops/servers
   Мониторы              → Computer monitors, display panels (all sizes)
@@ -210,22 +235,25 @@ Mapping rules:
   Проекторы и принадлежности → Projectors, projection screens, projector mounts,
                            replacement lamps, remote controls for projectors
   ИБП (UPS)             → UPS units, PDUs, surge protectors (rack and desktop)
-  Аксессуары            → Keyboards, mice, webcams, headsets, speakers, bags,
-                           docking stations, laptop stands, desk accessories,
-                           power adapters/chargers, misc peripherals
-  Хранение данных (СХД) → HDDs, SSDs (SATA/NVMe/M.2/2.5"/3.5"), USB flash drives,
-                           memory cards (SD/microSD), NAS devices (the box itself),
-                           tape drives, backup appliances, external drives
+  Аксессуары            → Peripheral devices that connect to a PC: keyboards, mice,
+                           webcams, headsets, speakers, gamepads, docking stations,
+                           laptop stands, bags, power adapters/chargers, misc peripherals
+  Хранение данных (СХД) → External HDDs (portable/desktop — has USB connector/enclosure),
+                           external SSDs, USB flash drives, memory cards (SD/microSD),
+                           NAS enclosure devices (e.g. Synology DS, QNAP TS — the
+                           standalone box, NOT NAS-optimised hard drives inside them),
+                           tape drives, backup appliances
   Программное обеспечение → Software licenses, OS (Windows/Linux), Microsoft 365,
                            antivirus, CAL licenses, virtualization licenses
   Сетевое оборудование  → Switches, routers, firewalls, Wi-Fi access points,
                            modems, media converters, SFP/SFP+ modules,
-                           patch panels, bulk cable spools (not individual cables)
-  Кабели/Переходники    → Individual cables (HDMI, DisplayPort, USB, power cords),
-                           single patch cords, adapters, KVM switches, converters,
-                           gender changers, splitters
-  Смарт-Гаджеты         → Smart watches, fitness trackers, smart home devices,
-                           IoT sensors/hubs, VR/AR headsets, smart speakers
+                           patch panels, bulk cable spools
+  Кабели/Переходники    → Individual cables (HDMI, DisplayPort, USB, power cords,
+                           LAN/Ethernet, optical fiber), single patch cords, adapters,
+                           KVM switches, converters, gender changers, splitters
+  Смарт-Гаджеты         → Wearables and smart gadgets: smart watches, fitness trackers,
+                           smart home devices, IoT sensors/hubs, VR/AR headsets,
+                           smart speakers — NOT smartphones or tablets
   ТВ/Аудио/Фото/Видео техника → TVs, home audio systems, digital cameras (DSLR/mirrorless),
                            action cameras, video cameras, lenses, tripods, gimbals,
                            microphones, studio lighting, streaming equipment
@@ -237,18 +265,24 @@ Mapping rules:
                            turnstiles, motion sensors, security lighting
 
 Decision tips for ambiguous products:
-  - SSD or HDD (any form factor) → Хранение данных (СХД)  [NOT Компоненты]
-  - NAS box/device → Хранение данных (СХД);  NIC/HBA card for a server → Компоненты ПК/Серверов
-  - IP phone / SIP phone → Телефоны
-  - Single patch cord or HDMI cable → Кабели/Переходники;  bulk spool → Сетевое оборудование
-  - Label printer for retail POS use → Торговое оборудование;  office label printer → Принтеры/Сканеры
-  - Laptop power adapter → Аксессуары;  UPS/PDU → ИБП (UPS)
+  - Internal SSD/HDD (M.2, 2.5", 3.5" — sold without enclosure) → Компоненты ПК/Серверов
+  - External/portable SSD or HDD (has USB port/enclosure) → Хранение данных (СХД)
+  - NAS-optimised HDD (Seagate IronWolf/Pro, WD Red/Pro) → Компоненты ПК/Серверов  [bare internal drive!]
+  - Surveillance HDD (Seagate SkyHawk, WD Purple/Purple Pro) → Компоненты ПК/Серверов  [bare internal drive!]
+  - NAS enclosure box (Synology, QNAP, etc.) → Хранение данных (СХД)
+  - NIC/HBA card → Компоненты ПК/Серверов
+  - IP phone / SIP phone → Телефоны  [NOT Аксессуары]
+  - LAN cable, optical cable, patch cord → Кабели/Переходники  [NOT Сетевое оборудование]
+  - Bulk cable spool → Сетевое оборудование
+  - Label printer for retail POS → Торговое оборудование;  office label printer → Принтеры/Сканеры
+  - Laptop power adapter/charger → Аксессуары;  UPS/PDU → ИБП (UPS)
   - Barcode scanner for inventory/retail → Торговое оборудование
   - Security/surveillance camera → Системы безопасности  [NOT ТВ/Аудио/Фото]
+  - Smart watch / fitness band → Смарт-Гаджеты  [NOT Аксессуары]
 
 ══════════════════════════════════════════════════
 Return ONLY the JSON array. No markdown fences, no explanation, no extra text.
-Fallbacks if truly uncertain: empty string for name/sku, "Аксессуары" for category.
+Fallbacks if truly uncertain: empty string for name, sku, and category.
 """
 
 
@@ -280,7 +314,7 @@ def call_gemini(batch: list[dict]) -> list[dict]:
             time.sleep(2 ** attempt)
 
     # Fallback: return empty dicts so we don't lose the row
-    return [{"name": r.get("name_raw", ""), "sku": r.get("model", ""), "category": "Аксессуары"}
+    return [{"name": r.get("name_raw", ""), "sku": r.get("model", ""), "category": "", "brand": r.get("brand", "")}
             for r in batch]
 
 
@@ -293,20 +327,36 @@ OUTPUT_HEADERS = [
     "availableQuantity", "moq", "brand", "category", "visibleCustomerTypes",
 ]
 
+# Matches capacity-like strings that suppliers sometimes put in the Brand column
+# e.g. "16GB", "32GB", "512MB", "1TB" — clearly not a brand name.
+_CAPACITY_RE = re.compile(r'^\d+\s*(GB|MB|TB|KB)$', re.IGNORECASE)
 
-def build_output_row(inter: dict, ai: dict, price_amd: int) -> dict:
+
+def build_output_row(inter: dict, ai: dict, price_amd: int,
+                     supplier_type: str = "international") -> dict:
+    brand_py = inter["brand_raw"]
+    # If the Python-extracted brand looks like a capacity value, fall back to
+    # Gemini's brand (which can infer it from SKU prefixes like KVR → Kingston).
+    if _CAPACITY_RE.match(brand_py.strip()):
+        brand = ai.get("brand") or brand_py
+    else:
+        brand = brand_py
+
+    # International suppliers don't hold stock locally — always "on_order".
+    stock = "on_order" if supplier_type == "international" else inter["stock"]
+
     return {
         "id":                   "",
-        "name":                 ai.get("name", inter["name_raw"]).strip(),
-        "sku":                  ai.get("sku",  inter["model"]).strip(),
+        "name":                 (ai.get("name") or inter["name_raw"]).strip(),
+        "sku":                  (ai.get("sku")  or inter["model"]).strip(),
         "price":                price_amd,
-        "stock":                inter["stock"],
+        "stock":                stock,
         "eta":                  inter["eta"],
         "description":          "",
         "availableQuantity":    inter["availableQuantity"],
         "moq":                  inter["moq"],
-        "brand":                inter["brand_raw"],
-        "category":             ai.get("category", "Аксессуары"),
+        "brand":                (ai.get("brand") or brand).strip(),
+        "category":             ai.get("category") or "",
         "visibleCustomerTypes": inter["visibleCustomerTypes"],
     }
 
@@ -364,7 +414,7 @@ def main():
             price_amd = calculate_price_amd(
                 inter["price_raw"], inter["currency"], supplier_type, cb_rate
             )
-            output_rows.append(build_output_row(inter, ai, price_amd))
+            output_rows.append(build_output_row(inter, ai, price_amd, supplier_type))
 
         # Small delay to avoid rate-limiting
         if batch_idx < n_batches - 1:
