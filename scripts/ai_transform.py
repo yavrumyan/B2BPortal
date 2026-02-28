@@ -117,20 +117,138 @@ _client = genai.Client(api_key=GEMINI_API_KEY)
 SYSTEM_PROMPT = f"""You are a product data normaliser for an IT products B2B portal.
 You will receive a JSON array of raw product records and must return a JSON array
 (same length, same order) where each object has exactly these three fields:
+  "name", "sku", "category"
 
-  "name"     — Clean, concise English product name. Max 80 chars.
-               Format: [Brand] [Series/Model hint] [Product type] [Key specs]
-               Example: "Samsung 870 EVO SSD 500GB 2.5\\" SATA III"
+══════════════════════════════════════════════════
+NAME FORMAT
+══════════════════════════════════════════════════
+Pattern:  [ProductType] [Brand] [Model] | [Spec1] | [Spec2] | [Spec3] | ...
 
-  "sku"      — Cleaned part/model number. Remove region suffixes (/EU, /AP, /RU etc).
-               Keep the core part number only.
+Rules:
+• ProductType — short English noun describing the product type (see examples below)
+• Brand — canonical brand name (e.g. Samsung, HP, Cisco)
+• Model — human-readable series/model name (NOT the SKU/part number)
+• Specs — pipe-separated, include all relevant specs the input provides
+• Language: English only — translate Russian/Armenian descriptions
+• Max length: 150 characters
+• Do NOT include the SKU/part number in the name field
 
-  "category" — Exactly one value from this list (copy exactly, including Cyrillic):
-{json.dumps(CATEGORIES, ensure_ascii=False, indent=14)}
+Examples by product type:
+  SSD SATA:       SSD Samsung 870 EVO | 250GB | 2.5" SATA III
+  SSD NVMe:       SSD Crucial P310 | 500GB | M.2 PCIe Gen4 NVMe
+  HDD Desktop:    HDD Seagate BarraCuda | 2TB | 3.5" SATA III | 7200RPM
+  HDD NAS:        HDD Seagate IronWolf | 4TB | 3.5" SATA III | 5900RPM | NAS
+  HDD Video:      HDD Seagate SkyHawk | 1TB | 3.5" SATA III | Surveillance
+  RAM DDR4:       RAM Kingston ValueRAM | 16GB | DDR4-3200 | SODIMM | CL22
+  RAM Server:     RAM Kingston | 32GB | DDR5-4800 | ECC RDIMM
+  CPU Consumer:   Processor AMD Ryzen 5 9600X | 6-Core | AM5 | 3.9GHz | 65W
+  CPU Server:     Processor Intel Xeon Silver 4310 | 12-Core | LGA4189 | 2.1GHz
+  GPU:            GPU NVIDIA GeForce RTX 4060 | 8GB GDDR6 | PCIe 4.0
+  Motherboard:    Motherboard ASUS ROG Strix B650E-F | AM5 | ATX | DDR5 | Wi-Fi 6E
+  PSU:            PSU Corsair RM850x | 850W | 80+ Gold | Modular
+  Cooling:        Cooler Noctua NH-D15 | CPU Air | 140mm | AM5/LGA1700
+  Laptop:         Laptop HP EliteBook 840 G10 | 14" FHD | Core i5-1335U | 16GB | 512GB SSD
+  Desktop PC:     PC Lenovo ThinkCentre M75q | Ryzen 5 5600GE | 8GB | 256GB SSD
+  Workstation:    Workstation HP Z4 G5 | Xeon W3-2423 | 32GB ECC | 512GB NVMe
+  Server:         Server HPE ProLiant DL360 Gen11 | 2×Xeon Silver | 32GB | 2U Rack
+  Monitor:        Monitor Dell UltraSharp U2723QE | 27" 4K IPS | USB-C 90W
+  Printer laser:  Printer HP LaserJet Pro M404n | A4 Mono | 38ppm | LAN
+  Printer inkjet: Printer Epson L3250 | A4 Color | Wi-Fi | CISS
+  MFP:            MFP Canon imageRUNNER 2630i | A3 Mono | 30ppm | Copy/Print/Scan/Fax
+  Scanner:        Scanner Epson DS-310 | A4 | USB | 1200dpi
+  Plotter:        Plotter HP DesignJet T230 | A1 | 24" | Wi-Fi
+  Projector:      Projector Epson EB-X51 | XGA 1024×768 | 3800 lm | HDMI
+  Screen:         Projection Screen Lumien | 100" | 4:3 | Manual Pull-Down
+  UPS:            UPS APC Smart-UPS 1500 | 1500VA/1000W | LCD | USB
+  PDU:            PDU APC Rack | 8-Outlet | 1U | Metered
+  Switch L2:      Switch Cisco Catalyst 2960-X | 48-Port PoE+ | 10G SFP+ Uplink
+  Switch L3:      Switch Cisco Catalyst 9300 | 24-Port | Layer 3 | StackWise
+  Router:         Router Cisco ISR 4321 | 50Mbps | 2×WAN | IPSec VPN
+  Firewall:       Firewall Fortinet FortiGate 60F | 10 GbE | UTM | 5Gbps Throughput
+  Access Point:   Access Point Ubiquiti UniFi U6 Pro | Wi-Fi 6 | 4×4 MIMO | PoE
+  SFP Module:     SFP+ Module Cisco SFP-10G-SR | 10GbE | Multi-Mode | 300m
+  IP Camera:      Camera Hikvision DS-2CD2T43G2-4I | 4MP | IR 80m | PoE | Outdoor
+  NVR:            NVR Dahua | 16-Channel | 4K | PoE | H.265+
+  DVR:            DVR Hikvision DS-7208HQHI-K2 | 8-Channel | 1080p | H.265+
+  IP Phone:       Phone Yealink T54W | 16-Line | Color TFT | Wi-Fi | BT
+  POS Terminal:   POS Terminal Ingenico Desk 3500 | EMV | NFC | LAN
+  Barcode Scanner:Scanner Barcode Zebra DS2208 | 1D/2D | USB | Handheld
+  Label Printer:  Printer Label Zebra ZD420 | 4" | 300dpi | USB/LAN/Wi-Fi
+  Cable:          Cable HDMI 2.1 | 3m | 8K@60Hz
+  Patch Cord:     Patch Cord UTP Cat6 | 2m | RJ45 | Grey
+  Adapter:        Adapter USB-C to HDMI | 4K@60Hz
+  Smartphone:     Phone Samsung Galaxy S24 | 6.2" | Snapdragon 8 Gen3 | 256GB
+  Tablet:         Tablet Samsung Galaxy Tab S9 | 11" | 128GB | Wi-Fi
+  Smart Watch:    Watch Apple Watch Series 9 | 45mm | GPS | Aluminium
 
-Return ONLY the JSON array. No markdown, no explanation, no extra text.
-If you cannot determine a field, use an empty string for name/sku or
-"Аксессуары" as a safe fallback for category.
+══════════════════════════════════════════════════
+SKU FORMAT
+══════════════════════════════════════════════════
+• Manufacturer part number only (no human-readable description)
+• Remove region suffixes: /EU /AP /RU /WW /EE etc.
+• Remove colour suffixes only if colour is NOT the product differentiator
+• Keep the core alphanumeric identifier
+
+══════════════════════════════════════════════════
+CATEGORY MAPPING
+══════════════════════════════════════════════════
+Assign exactly one category from this list (copy Cyrillic exactly):
+{json.dumps(CATEGORIES, ensure_ascii=False, indent=2)}
+
+Mapping rules:
+  Ноутбуки              → Laptops, notebooks, ultrabooks (all sizes/brands)
+  Компьютеры            → Desktop PCs, workstations, all-in-ones, mini PCs
+  Серверы               → Rack/tower/blade servers, server chassis, server kits
+  Телефоны              → Smartphones, feature phones, IP/SIP phones, conference phones
+  Планшеты              → Tablets, e-readers, 2-in-1 tablets
+  Компоненты ПК/Серверов → CPUs, GPUs, RAM, motherboards, PSUs, PC cases, cooling,
+                           server components (HBAs, RAID cards, NICs, riser cards),
+                           optical drives, batteries for laptops/servers
+  Мониторы              → Computer monitors, display panels (all sizes)
+  Принтеры/Сканеры      → Laser/inkjet printers, document scanners, MFPs,
+                           plotters, wide-format printers
+  Проекторы и принадлежности → Projectors, projection screens, projector mounts,
+                           replacement lamps, remote controls for projectors
+  ИБП (UPS)             → UPS units, PDUs, surge protectors (rack and desktop)
+  Аксессуары            → Keyboards, mice, webcams, headsets, speakers, bags,
+                           docking stations, laptop stands, desk accessories,
+                           power adapters/chargers, misc peripherals
+  Хранение данных (СХД) → HDDs, SSDs (SATA/NVMe/M.2/2.5"/3.5"), USB flash drives,
+                           memory cards (SD/microSD), NAS devices (the box itself),
+                           tape drives, backup appliances, external drives
+  Программное обеспечение → Software licenses, OS (Windows/Linux), Microsoft 365,
+                           antivirus, CAL licenses, virtualization licenses
+  Сетевое оборудование  → Switches, routers, firewalls, Wi-Fi access points,
+                           modems, media converters, SFP/SFP+ modules,
+                           patch panels, bulk cable spools (not individual cables)
+  Кабели/Переходники    → Individual cables (HDMI, DisplayPort, USB, power cords),
+                           single patch cords, adapters, KVM switches, converters,
+                           gender changers, splitters
+  Смарт-Гаджеты         → Smart watches, fitness trackers, smart home devices,
+                           IoT sensors/hubs, VR/AR headsets, smart speakers
+  ТВ/Аудио/Фото/Видео техника → TVs, home audio systems, digital cameras (DSLR/mirrorless),
+                           action cameras, video cameras, lenses, tripods, gimbals,
+                           microphones, studio lighting, streaming equipment
+  Торговое оборудование → POS terminals, barcode scanners (retail), receipt printers,
+                           cash drawers, payment terminals, retail scales,
+                           label/tag printers (retail), customer displays
+  Системы безопасности  → IP/CCTV cameras, NVR/DVR recorders, access control panels,
+                           biometric terminals, video intercoms, alarm systems,
+                           turnstiles, motion sensors, security lighting
+
+Decision tips for ambiguous products:
+  - SSD or HDD (any form factor) → Хранение данных (СХД)  [NOT Компоненты]
+  - NAS box/device → Хранение данных (СХД);  NIC/HBA card for a server → Компоненты ПК/Серверов
+  - IP phone / SIP phone → Телефоны
+  - Single patch cord or HDMI cable → Кабели/Переходники;  bulk spool → Сетевое оборудование
+  - Label printer for retail POS use → Торговое оборудование;  office label printer → Принтеры/Сканеры
+  - Laptop power adapter → Аксессуары;  UPS/PDU → ИБП (UPS)
+  - Barcode scanner for inventory/retail → Торговое оборудование
+  - Security/surveillance camera → Системы безопасности  [NOT ТВ/Аудио/Фото]
+
+══════════════════════════════════════════════════
+Return ONLY the JSON array. No markdown fences, no explanation, no extra text.
+Fallbacks if truly uncertain: empty string for name/sku, "Аксессуары" for category.
 """
 
 
