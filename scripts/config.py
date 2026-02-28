@@ -37,6 +37,7 @@ AI_BATCH_SIZE  = 50          # products per API call
 # ── File paths (relative to repo root) ────────────────────────────────────────
 RAW_CSV          = "raw_product_export_data.csv"
 SUPPLIERS_CSV    = "scripts/suppliers.csv"
+BRANDS_CSV       = "scripts/brands.csv"
 INTERMEDIATE_CSV = "scripts/intermediate.csv"
 OUTPUT_CSV       = "scripts/output_import.csv"
 ERROR_LOG        = "scripts/parse_errors.csv"

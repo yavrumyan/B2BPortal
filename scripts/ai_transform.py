@@ -252,7 +252,7 @@ def main():
 
     # Write output
     out_path = OUTPUT_CSV if not args.test else OUTPUT_CSV.replace(".csv", "_test.csv")
-    with open(out_path, "w", newline="", encoding="utf-8") as f:
+    with open(out_path, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=OUTPUT_HEADERS)
         writer.writeheader()
         writer.writerows(output_rows)

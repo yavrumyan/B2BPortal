@@ -20,13 +20,24 @@ import os
 # ── make sure we can import config from repo root regardless of cwd ──────────
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 from config import (
-    RAW_CSV, SUPPLIERS_CSV, INTERMEDIATE_CSV, ERROR_LOG,
+    RAW_CSV, SUPPLIERS_CSV, BRANDS_CSV, INTERMEDIATE_CSV, ERROR_LOG,
     STOCK_LOW_MAX,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Load supplier registry
 # ─────────────────────────────────────────────────────────────────────────────
+
+def load_brands(path: str) -> list:
+    """Return canonical brand names sorted longest-first for greedy word-boundary matching."""
+    brands = []
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        for row in csv.DictReader(f):
+            b = row["brand"].strip()
+            if b:
+                brands.append(b)
+    return sorted(brands, key=len, reverse=True)
+
 
 def load_supplier_config(path: str) -> dict:
     """Return {supplier_name: {type, currency, eta, visibleCustomerTypes}}."""
@@ -151,15 +162,33 @@ def map_stock_status(quantity: int, supplier_type: str) -> str:
     return "in_stock"       # quantity > STOCK_LOW_MAX
 
 
-def extract_brand(brand_raw: str, name: str) -> str:
-    """Use Brand column when populated; otherwise extract first word(s) from Name."""
+def extract_brand(brand_raw: str, name: str, known_brands: list) -> str:
+    """
+    Resolve brand name using a three-step priority:
+    1. Brand column value matches a known canonical brand → return canonical casing.
+    2. Scan the product name for a known brand (word-boundary, case-insensitive).
+    3. Fallback: use Brand column as-is (even if not in list), or first token(s) from name.
+    """
     brand_raw = brand_raw.strip()
+
+    # Step 1 — Brand column is a recognised brand
+    b_lower = brand_raw.lower()
+    for kb in known_brands:
+        if kb.lower() == b_lower:
+            return kb
+
+    # Step 2 — Scan name for a known brand (word-boundary match)
+    name_lower = name.lower()
+    for kb in known_brands:
+        pattern = r"(?<!\w)" + re.escape(kb.lower()) + r"(?!\w)"
+        if re.search(pattern, name_lower):
+            return kb
+
+    # Step 3 — Fallback
     if brand_raw:
-        return brand_raw
-    # Extract first capitalised token(s) from Name as a best-effort brand
+        return brand_raw  # use Brand column verbatim even if unknown
     tokens = name.split()
     if tokens:
-        # Take first token; if it's short (≤3 chars) and next token is also capitalised, take both
         first = tokens[0]
         if len(first) <= 3 and len(tokens) > 1 and tokens[1][0].isupper():
             return f"{first} {tokens[1]}"
@@ -203,6 +232,8 @@ DEFAULT_SUPPLIER = {
 def main():
     supplier_config = load_supplier_config(SUPPLIERS_CSV)
     print(f"Loaded {len(supplier_config)} supplier(s) from {SUPPLIERS_CSV}")
+    known_brands = load_brands(BRANDS_CSV)
+    print(f"Loaded {len(known_brands)} brand(s) from {BRANDS_CSV}")
 
     ok_rows    = []
     error_rows = []
@@ -247,7 +278,7 @@ def main():
         quantity = parse_stock_quantity(row.get("Stock", "0")) or 0
         moq      = parse_moq(row.get("MOQ", "NO"))
         stock    = map_stock_status(quantity, cfg["type"])
-        brand    = extract_brand(row.get("Brand", ""), row.get("Name", ""))
+        brand    = extract_brand(row.get("Brand", ""), row.get("Name", ""), known_brands)
 
         ok_rows.append({
             "supplier":             supplier_name,
@@ -272,7 +303,7 @@ def main():
 
     # ── Write error log ──
     if error_rows:
-        with open(ERROR_LOG, "w", newline="", encoding="utf-8") as f:
+        with open(ERROR_LOG, "w", newline="", encoding="utf-8-sig") as f:
             writer = csv.DictWriter(f, fieldnames=["lineno", "raw", "reason"])
             writer.writeheader()
             writer.writerows(error_rows)
