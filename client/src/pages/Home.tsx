@@ -1142,6 +1142,7 @@ export default function Home() {
                         setDeliveryTimeFilter("");
                         setBrandFilter("");
                         setCategoryFilter("");
+                        setSearchQuery("");
                       }}
                       data-testid="button-clear-filters"
                       className="bg-black hover:bg-black/80 text-white self-end"
@@ -1180,12 +1181,11 @@ export default function Home() {
                 </div>
               ) : (() => {
                 const filteredProducts = products.filter((product) => {
-                  // Search filter
+                  // Search filter — every word must appear somewhere in name or sku
                   if (searchQuery) {
-                    const query = searchQuery.toLowerCase();
-                    const matchesName = product.name.toLowerCase().includes(query);
-                    const matchesSku = product.sku ? product.sku.toLowerCase().includes(query) : false;
-                    if (!matchesName && !matchesSku) return false;
+                    const words = searchQuery.toLowerCase().split(/\s+/).filter(Boolean);
+                    const target = `${product.name} ${product.sku ?? ""}`.toLowerCase();
+                    if (!words.every(word => target.includes(word))) return false;
                   }
 
                   // Price filter

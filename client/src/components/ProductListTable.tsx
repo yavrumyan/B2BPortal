@@ -54,11 +54,10 @@ export default function ProductListTable({
 
   const getSortedAndFilteredProducts = () => {
     let result = products.filter((product) => {
-      const searchLower = searchTerm.toLowerCase();
-      return (
-        product.name.toLowerCase().includes(searchLower) ||
-        (product.sku && product.sku.toLowerCase().includes(searchLower))
-      );
+      if (!searchTerm) return true;
+      const words = searchTerm.toLowerCase().split(/\s+/).filter(Boolean);
+      const target = `${product.name} ${product.sku ?? ""}`.toLowerCase();
+      return words.every(word => target.includes(word));
     });
 
     if (sortKey) {
