@@ -416,27 +416,6 @@ export default function Home() {
   const { play: playNotificationSound } = useNotificationSound();
   const prevCountsRef = useRef({ orders: 0, inquiries: 0 });
 
-  const CATEGORIES = [
-    "Ноутбуки",
-    "Компьютеры",
-    "Серверы",
-    "Телефоны",
-    "Планшеты",
-    "Компоненты ПК",
-    "Мониторы",
-    "Принтеры/Сканеры",
-    "Проекторы и экраны",
-    "ИБП (UPS)",
-    "Аксессуары",
-    "Программное обеспечение",
-    "Сетевое оборудование",
-    "Кабели/Переходники",
-    "Гаджеты",
-    "ТВ/Аудио/Видео техника",
-    "Фото/Видео техника",
-    "Торговое оборудование",
-    "Системы безопасности",
-  ];
 
   // Fetch cart from backend when authenticated
   const { data: backendCart } = useQuery<CartItem[]>({
@@ -1087,10 +1066,15 @@ export default function Home() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">Все статусы</SelectItem>
-                          <SelectItem value="in_stock">В наличии</SelectItem>
-                          <SelectItem value="low_stock">Мало</SelectItem>
-                          <SelectItem value="out_of_stock">Нет в наличии</SelectItem>
-                          <SelectItem value="on_order">Под заказ</SelectItem>
+                          {(["in_stock", "low_stock", "out_of_stock", "on_order"] as const)
+                            .filter(s => products.some(p => p.stock === s))
+                            .map(s => {
+                              const label: Record<string, string> = {
+                                in_stock: "В наличии", low_stock: "Мало",
+                                out_of_stock: "Нет в наличии", on_order: "Под заказ",
+                              };
+                              return <SelectItem key={s} value={s}>{label[s]}</SelectItem>;
+                            })}
                         </SelectContent>
                       </Select>
                     </div>
@@ -1104,14 +1088,9 @@ export default function Home() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">Все сроки</SelectItem>
-                          <SelectItem value="1-2 дня">1-2 дня</SelectItem>
-                          <SelectItem value="3-7 дней">3-7 дней</SelectItem>
-                          <SelectItem value="7-14 дней">7-14 дней</SelectItem>
-                          <SelectItem value="14-21 дней">14-21 дней</SelectItem>
-                          <SelectItem value="22-35 дней">22-35 дней</SelectItem>
-                          <SelectItem value="30-45 дней">30-45 дней</SelectItem>
-                          <SelectItem value="40-60 дней">40-60 дней</SelectItem>
-                          <SelectItem value="65-90 дней">65-90 дней</SelectItem>
+                          {Array.from(new Set(products.map(p => p.eta).filter((e): e is string => !!e)))
+                            .sort()
+                            .map(eta => <SelectItem key={eta} value={eta}>{eta}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
@@ -1145,11 +1124,9 @@ export default function Home() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">Все категории</SelectItem>
-                          {CATEGORIES.map((cat) => (
-                            <SelectItem key={cat} value={cat}>
-                              {cat}
-                            </SelectItem>
-                          ))}
+                          {Array.from(new Set(products.map(p => p.category).filter((c): c is string => !!c)))
+                            .sort()
+                            .map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>

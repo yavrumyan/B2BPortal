@@ -1056,23 +1056,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return { id, name: cust?.companyName ?? id, revenue };
         });
 
-      // Top 5 products by revenue
-      const productRevenue = new Map<string, { name: string; revenue: number }>();
+      // Top 5 categories by revenue
+      const allProducts = await storage.getProducts();
+      const productCategoryMap = new Map<string, string>(
+        allProducts.map(p => [p.id, p.category ?? "Без категории"])
+      );
+      const categoryRevenue = new Map<string, number>();
       for (const order of allOrders) {
         const items = (order.items as any[]) ?? [];
         for (const item of items) {
-          const key = item.productId ?? item.name;
-          const existing = productRevenue.get(key);
-          if (existing) {
-            existing.revenue += item.price * item.quantity;
-          } else {
-            productRevenue.set(key, { name: item.name ?? key, revenue: item.price * item.quantity });
-          }
+          const category = (item.productId && productCategoryMap.get(item.productId)) || "Без категории";
+          categoryRevenue.set(category, (categoryRevenue.get(category) ?? 0) + item.price * item.quantity);
         }
       }
-      const topProducts = Array.from(productRevenue.values())
-        .sort((a, b) => b.revenue - a.revenue)
-        .slice(0, 5);
+      const topCategories = Array.from(categoryRevenue.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, revenue]) => ({ name, revenue }));
 
       // Overdue total (unpaid or partial, older than 7 days)
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -1094,7 +1094,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dailyOrders,
         revenueByType: revenueByTypeArr,
         topCustomers,
-        topProducts,
+        topCategories,
       });
     } catch (error: any) {
       console.error("Analytics error:", error);

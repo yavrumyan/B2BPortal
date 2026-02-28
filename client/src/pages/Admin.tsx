@@ -575,14 +575,14 @@ export default function Admin() {
 
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-base">Топ-5 товаров по выручке</CardTitle>
+                        <CardTitle className="text-base">Топ-5 категорий по выручке</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <ResponsiveContainer width="100%" height={200}>
-                          <BarChart data={analytics.topProducts} layout="vertical">
+                          <BarChart data={analytics.topCategories} layout="vertical">
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                            <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={120} />
+                            <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={160} />
                             <Tooltip formatter={(v: any) => `${v.toLocaleString('ru-RU')} ֏`} />
                             <Bar dataKey="revenue" fill="#16a34a" radius={[0, 4, 4, 0]} />
                           </BarChart>
