@@ -35,7 +35,8 @@ from config import (
     SUPPLIERS_CSV,
 )
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types as genai_types
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Exchange rate
@@ -111,8 +112,7 @@ def calculate_price_amd(price_raw: str, currency: str, supplier_type: str,
 # Gemini API
 # ─────────────────────────────────────────────────────────────────────────────
 
-genai.configure(api_key=GEMINI_API_KEY)
-_model = genai.GenerativeModel(GEMINI_MODEL)
+_client = genai.Client(api_key=GEMINI_API_KEY)
 
 SYSTEM_PROMPT = f"""You are a product data normaliser for an IT products B2B portal.
 You will receive a JSON array of raw product records and must return a JSON array
@@ -140,9 +140,11 @@ def call_gemini(batch: list[dict]) -> list[dict]:
 
     for attempt in range(3):
         try:
-            response = _model.generate_content(
-                [SYSTEM_PROMPT, payload],
-                generation_config=genai.types.GenerationConfig(
+            response = _client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=payload,
+                config=genai_types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT,
                     temperature=0.1,
                     response_mime_type="application/json",
                 ),
