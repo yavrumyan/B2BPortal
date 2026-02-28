@@ -1,5 +1,5 @@
 # B2B Portal – Hostinger Deployment Session Memory
-_Last updated: 2026-02-24 — **DEPLOYMENT SUCCESSFUL ✅**_
+_Last updated: 2026-02-28 — **DEPLOYMENT SUCCESSFUL ✅**_
 
 ---
 
@@ -230,6 +230,79 @@ chmod 600 ~/.b2b_env
 7. **Root cause**: `filteredProductIds` useMemo was placed at line ~416 but `const { data: products }` was declared at line ~491. JavaScript `const` has a temporal dead zone — the memo callback ran during first render and threw `ReferenceError: Cannot access 'products' before initialization` → blank white page.
    - **Fix**: moved `useMemo` to immediately after the `products` `useQuery` declaration (commit `b7141ca`).
    - **Rule for future**: any hook/memo that references a `const` from another hook must come AFTER that hook's declaration line.
+
+## What Was Done in This Session (2026-02-28)
+
+### Category list finalised
+The product category list was reviewed and locked to exactly 19 values used across the portal
+AND in the Gemini AI prompt for category assignment. Any future category changes must be updated in:
+1. `client/src/components/ProductListTable.tsx` — `CATEGORIES` constant (admin edit dropdown)
+2. `client/src/pages/Home.tsx` — `categories` array in `CustomerInquiriesSection` (inquiry form)
+3. `scripts/config.py` — `CATEGORIES` list (Gemini system prompt)
+
+Final 19 categories (must match portal exactly, including Cyrillic):
+```
+Ноутбуки, Компьютеры, Серверы, Телефоны, Планшеты,
+Компоненты ПК/Серверов, Мониторы, Принтеры/Сканеры,
+Проекторы и принадлежности, ИБП (UPS), Аксессуары,
+Хранение данных (СХД), Программное обеспечение, Сетевое оборудование,
+Кабели/Переходники, Смарт-Гаджеты, ТВ/Аудио/Фото/Видео техника,
+Торговое оборудование, Системы безопасности
+```
+
+### CSV conversion pipeline built (`scripts/`)
+Python pipeline converts raw multi-supplier product export → b2b.chip.am import format.
+Scripts live in the repo (`S:\B2BPortal-main\scripts\`) but are **not** deployed to server — run locally.
+
+**How to run:**
+```bash
+pip install -r scripts/requirements.txt
+python scripts/preprocess.py           # Step 1: → intermediate.csv + parse_errors.csv
+python scripts/ai_transform.py --test  # Step 2 (test, first 10 rows): → output_import_test.csv
+python scripts/ai_transform.py         # Step 2 (full run): → output_import.csv
+```
+
+**Files:**
+- `scripts/suppliers.csv` — editable supplier registry (add new suppliers here, no code changes needed)
+- `scripts/config.py` — all tunable rates + Gemini API key + CB rate URL + file paths
+- `scripts/preprocess.py` — Step 1: parse raw CSV with misalignment recovery, filter/map fields
+- `scripts/ai_transform.py` — Step 2: fetch live CB rate, Gemini name/SKU/category, compute AMD price
+- `scripts/requirements.txt` — `google-generativeai>=0.7.0`, `requests>=2.31.0`
+
+**Raw CSV format** (`raw_product_export_data.csv`):
+```
+Date, Source, Supplier, Category, Brand, Model, Name, Price, Currency, Stock, MOQ, Notes
+```
+⚠️ DG and Compstyle LLC rows have unescaped commas in the Name field — `preprocess.py` handles
+this with anchor detection (scans right-to-left for known Currency value "USD"/"AMD").
+
+**Suppliers (3 currently; will grow to 20+):**
+| Supplier | Type | Currency | ETA | Visibility |
+|---|---|---|---|---|
+| Proks SIA | international | USD | 14-21 дней | all 3 customer types |
+| DG | local | USD | 1-2 дня | корпоративный + гос. учреждение |
+| Compstyle LLC | local | AMD | 1-2 дня | корпоративный + гос. учреждение |
+
+**Price formulas (in `config.py` — ⚠️ review margins before running):**
+```
+international: price_usd × (1+SHIPPING 0.07) × (1+VAT 0.20) × (1+CUSTOMS 0.05) × cb_rate × (1+MARGIN 0.20)
+local USD:     price_usd × cb_rate × (1+MARGIN 0.15)
+local AMD:     price_amd × (1+MARGIN 0.15)
+cb_rate:       fetched live from https://cb.am/latest.json.php → float(data["USD"]) AMD per 1 USD
+```
+
+**Gemini API:** `gemini-2.5-flash-lite` via `google-generativeai` SDK
+- Key in `config.py` (`GEMINI_API_KEY`)
+- 50 products per batch call; 3-retry with backoff; fallback on failure
+- Returns `name` (clean English ≤80 chars), `sku` (cleaned part number), `category` (from 19-item list)
+
+**Stock mapping:**
+- Local suppliers → always `in_stock`
+- International (Proks SIA): Stock 1–9 → `low_stock`; Stock ≥ 10 → `in_stock`
+- Zero-stock products excluded entirely from output
+
+**⚠️ TODO before first run:** Adjust margin rates in `scripts/config.py`:
+`INTL_SHIPPING_RATE`, `INTL_CUSTOMS_RATE`, `INTL_MARGIN`, `LOCAL_USD_MARGIN`, `LOCAL_AMD_MARGIN`
 
 ---
 
