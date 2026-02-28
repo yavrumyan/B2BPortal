@@ -3,6 +3,23 @@
 # Edit the TODO values before running the scripts.
 # =============================================================================
 
+import os
+import pathlib
+
+
+def _load_dotenv(path):
+    """Minimal .env loader — no extra dependencies required."""
+    p = pathlib.Path(path)
+    if p.exists():
+        for line in p.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, _, v = line.partition("=")
+                os.environ.setdefault(k.strip(), v.strip())
+
+
+_load_dotenv(pathlib.Path(__file__).parent / ".env")
+
 # ── Price formula rates ───────────────────────────────────────────────────────
 #
 # INTERNATIONAL suppliers (foreign, USD pricing):
@@ -30,7 +47,15 @@ LOCAL_AMD_MARGIN   = 0.15   # TODO: adjust margin
 CB_RATE_URL = "https://cb.am/latest.json.php"
 
 # ── Gemini API ─────────────────────────────────────────────────────────────────
-GEMINI_API_KEY = "AIzaSyAtOxQEcdERwI6RWwrQFZGKJKba89ZhxEs"
+# Key is loaded from scripts/.env (gitignored) — never hardcode here.
+# Set GEMINI_API_KEY=<your key> in scripts/.env before running.
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+if not GEMINI_API_KEY:
+    raise RuntimeError(
+        "GEMINI_API_KEY not set.\n"
+        "Add it to scripts/.env:  GEMINI_API_KEY=<your key>\n"
+        "Get a key at: https://aistudio.google.com/app/apikey"
+    )
 GEMINI_MODEL   = "gemini-2.5-flash-lite"
 AI_BATCH_SIZE  = 50          # products per API call
 
