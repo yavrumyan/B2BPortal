@@ -42,7 +42,7 @@ def load_brands(path: str) -> list:
 def load_supplier_config(path: str) -> dict:
     """Return {supplier_name: {type, currency, eta, visibleCustomerTypes}}."""
     config = {}
-    with open(path, newline="", encoding="utf-8") as f:
+    with open(path, newline="", encoding="utf-8-sig") as f:
         for row in csv.DictReader(f):
             config[row["supplier_name"].strip()] = {
                 "type":                 row["type"].strip(),
@@ -296,7 +296,7 @@ def main():
         })
 
     # ── Write intermediate CSV ──
-    with open(INTERMEDIATE_CSV, "w", newline="", encoding="utf-8") as f:
+    with open(INTERMEDIATE_CSV, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=INTERMEDIATE_HEADERS)
         writer.writeheader()
         writer.writerows(ok_rows)

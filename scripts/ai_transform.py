@@ -62,7 +62,7 @@ def fetch_cb_rate() -> float:
 def load_supplier_types(path: str) -> dict:
     """Return {supplier_name: type} from suppliers.csv."""
     types = {}
-    with open(path, newline="", encoding="utf-8") as f:
+    with open(path, newline="", encoding="utf-8-sig") as f:
         for row in csv.DictReader(f):
             types[row["supplier_name"].strip()] = row["type"].strip()
     return types
@@ -474,7 +474,7 @@ def main():
     args = parser.parse_args()
 
     # Load intermediate rows
-    with open(INTERMEDIATE_CSV, newline="", encoding="utf-8") as f:
+    with open(INTERMEDIATE_CSV, newline="", encoding="utf-8-sig") as f:
         rows = list(csv.DictReader(f))
 
     if args.test:
