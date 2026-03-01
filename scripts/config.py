@@ -163,13 +163,17 @@ if not GEMINI_API_KEY:
 GEMINI_MODEL   = "gemini-2.5-flash-lite"
 AI_BATCH_SIZE  = 50          # products per API call
 
-# ── File paths (relative to repo root) ────────────────────────────────────────
-RAW_CSV          = "raw_product_export_data.csv"
-SUPPLIERS_CSV    = "scripts/suppliers.csv"
-BRANDS_CSV       = "scripts/brands.csv"
-INTERMEDIATE_CSV = "scripts/intermediate.csv"
-OUTPUT_CSV       = "scripts/output_import.csv"
-ERROR_LOG        = "scripts/parse_errors.csv"
+# ── File paths (absolute, resolved relative to this file's location) ──────────
+# Scripts can be run from any working directory (repo root or scripts/).
+_SCRIPTS_DIR = pathlib.Path(__file__).parent
+_ROOT_DIR    = _SCRIPTS_DIR.parent
+
+RAW_CSV          = str(_ROOT_DIR    / "raw_product_export_data.csv")
+SUPPLIERS_CSV    = str(_SCRIPTS_DIR / "suppliers.csv")
+BRANDS_CSV       = str(_SCRIPTS_DIR / "brands.csv")
+INTERMEDIATE_CSV = str(_SCRIPTS_DIR / "intermediate.csv")
+OUTPUT_CSV       = str(_SCRIPTS_DIR / "output_import.csv")
+ERROR_LOG        = str(_SCRIPTS_DIR / "parse_errors.csv")
 
 # ── Stock thresholds (international suppliers only) ───────────────────────────
 # Local suppliers are always set to "in_stock" regardless of quantity.
