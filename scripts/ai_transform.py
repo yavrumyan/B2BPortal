@@ -29,7 +29,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 from config import (
     GEMINI_API_KEY, GEMINI_MODEL, AI_BATCH_SIZE,
     CB_RATE_URL,
-    INTL_SHIPPING_RATE, INTL_VAT_RATE, INTL_CUSTOMS_RATE, INTL_MARGIN,
+    INTL_VAT_RATE, INTL_BTF_RATE, INTL_CBF_RATE,
+    INTL_REGIONS, INTL_PRODUCT_SPECS,
+    SUPPLIER_REGIONS, SUPPLIER_REGIONS_DEFAULT,
+    CATEGORY_TO_PRODUCT_TYPE,
     LOCAL_USD_MARGIN, LOCAL_AMD_MARGIN,
     INTERMEDIATE_CSV, OUTPUT_CSV, CATEGORIES,
     SUPPLIERS_CSV,
@@ -65,20 +68,100 @@ def load_supplier_types(path: str) -> dict:
     return types
 
 
-def calculate_price_amd(price_raw: str, currency: str, supplier_type: str,
-                         cb_rate: float) -> int:
+def detect_product_type(category: str, name: str) -> str:
+    """Map Gemini category + product name to an INTL_PRODUCT_SPECS key.
+
+    For multi-value categories (Компоненты ПК/Серверов, Принтеры/Сканеры, etc.)
+    keyword-scans the product name to pick the most specific Excel product type.
+    Falls back to CATEGORY_TO_PRODUCT_TYPE for single-type categories.
     """
-    Convert raw supplier price to final AMD integer.
+    n = name.lower()
 
-    international (USD):
-        cost_usd = price × (1+SHIPPING) × (1+VAT) × (1+CUSTOMS)
-        final    = cost_usd × cb_rate × (1+MARGIN)
+    if category == "Компоненты ПК/Серверов":
+        if any(k in n for k in ("cpu", "processor", "xeon", "ryzen", "core i", "процессор")):
+            return "CPU"
+        if any(k in n for k in ("gpu", "geforce", "radeon", "video card", "graphics", "видеокарта")):
+            return "Video Cards"
+        if any(k in n for k in ("ddr", "dimm", "sodimm", "ram")):
+            return "RAM"
+        if any(k in n for k in ("ssd", "nvme", "m.2")):
+            return "SSD"
+        if any(k in n for k in ("hdd", "hard disk", "hard drive", "жёсткий")):
+            return "HDD"
+        if any(k in n for k in ("mainboard", "motherboard", "материнская")):
+            return "Mainboards"
+        if any(k in n for k in ("psu", "power supply", "блок питания")):
+            return "PC PSU"
+        if any(k in n for k in ("case", "корпус")):
+            return "PC Case"
+        if any(k in n for k in ("cooler", "кулер", "cooling")):
+            return "Coolers for CPU"
+        return "RAM"  # unknown component → conservative fallback
 
-    local USD:
-        final = price_usd × cb_rate × (1+MARGIN)
+    if category == "Принтеры/Сканеры":
+        return "Scanners" if any(k in n for k in ("scanner", "сканер")) else "Printers"
 
-    local AMD:
-        final = price_amd × (1+MARGIN)
+    if category == "Проекторы и принадлежности":
+        if any(k in n for k in ("screen", "экран")):
+            return "Projector Screens"
+        if any(k in n for k in ("mount", "кронштейн")):
+            return "Projector Mounting"
+        return "Projectors"
+
+    if category == "Аксессуары":
+        if any(k in n for k in ("keyboard", "клавиатура")):
+            return "Keyboards"
+        if any(k in n for k in ("mouse", "мышь", "мышка")):
+            return "Mice"
+        if any(k in n for k in ("speaker", "колонка", "акустика")):
+            return "Speakers"
+        if any(k in n for k in ("headset", "headphone", "наушник")):
+            return "Headsets"
+        if any(k in n for k in ("webcam", "веб-камера")):
+            return "Webcams"
+        if any(k in n for k in ("gamepad", "controller", "геймпад")):
+            return "Gamepads"
+        return "Keyboards"  # default accessory
+
+    if category == "Сетевое оборудование":
+        return "Switches" if any(k in n for k in ("switch", "коммутатор")) else "Routers"
+
+    if category == "Кабели/Переходники":
+        return "Adapters" if any(k in n for k in ("adapter", "переходник", "адаптер")) else "Cables"
+
+    if category == "ТВ/Аудио/Фото/Видео техника":
+        if any(k in n for k in ("photo", "camera", "фото", "фотоаппарат")):
+            return "Photo Cameras"
+        if any(k in n for k in ("video camera", "видеокамера")):
+            return "Video Cameras"
+        if any(k in n for k in ("drone", "дрон")):
+            return "Drones"
+        return "TVs"
+
+    if category == "Торговое оборудование":
+        if any(k in n for k in ("barcode", "штрих-код")):
+            return "Barcode Scanners"
+        if any(k in n for k in ("label", "этикетка")):
+            return "Label/Barcode Printers"
+        if any(k in n for k in ("cash drawer", "денежный ящик")):
+            return "Cash Drawers"
+        return "POS Systems"
+
+    return CATEGORY_TO_PRODUCT_TYPE.get(category, "Default")
+
+
+def calculate_price_amd(price_raw: str, currency: str, supplier_type: str,
+                        cb_rate: float, supplier_name: str = "",
+                        category: str = "", product_name: str = "") -> int:
+    """
+    Convert raw supplier price to final AMD, rounded UP to nearest 50.
+
+    International (USD):
+        DP_USD  = [P + F + CD + CBF] × (1 + VAT_RATE + BTF_RATE) × (1 + Margin%)
+        final_amd = DP_USD × cb_rate
+
+    Local USD:  price_usd × cb_rate × (1 + LOCAL_USD_MARGIN)
+    Local AMD:  price_amd × (1 + LOCAL_AMD_MARGIN)
     """
     try:
         price = float(price_raw)
@@ -91,9 +174,27 @@ def calculate_price_amd(price_raw: str, currency: str, supplier_type: str,
     currency = currency.upper()
 
     if supplier_type == "international":
-        # All international suppliers currently priced in USD
-        cost_usd = price * (1 + INTL_SHIPPING_RATE) * (1 + INTL_VAT_RATE) * (1 + INTL_CUSTOMS_RATE)
-        final    = cost_usd * cb_rate * (1 + INTL_MARGIN)
+        region = SUPPLIER_REGIONS.get(supplier_name, SUPPLIER_REGIONS_DEFAULT)
+        prod_type = detect_product_type(category, product_name)
+        weight, volume, duty_rate, ship_mode, margin = INTL_PRODUCT_SPECS.get(
+            prod_type, INTL_PRODUCT_SPECS["Default"]
+        )
+
+        region_data = INTL_REGIONS.get(region, INTL_REGIONS["Europe"])
+        mode_data = region_data.get(ship_mode)
+        if mode_data is None:
+            # ground-preferred product to America/China/India → use sea instead
+            alt = "sea" if ship_mode == "ground" else "ground"
+            mode_data = region_data.get(alt, list(region_data.values())[0])
+        rate_kg, rate_cbm, customs_applicable = mode_data
+
+        F   = weight * rate_kg if rate_kg else volume * rate_cbm
+        CD  = price * duty_rate if (customs_applicable and duty_rate > 0) else 0.0
+        CBF = (price + F + CD) * INTL_CBF_RATE if customs_applicable else 0.0
+
+        TLC    = price + F + CD + CBF
+        DP_USD = TLC * (1 + INTL_VAT_RATE + INTL_BTF_RATE) * (1 + margin)
+        final  = DP_USD * cb_rate
 
     elif supplier_type == "local" and currency == "USD":
         final = price * cb_rate * (1 + LOCAL_USD_MARGIN)
@@ -105,7 +206,8 @@ def calculate_price_amd(price_raw: str, currency: str, supplier_type: str,
         # Fallback: treat as local USD
         final = price * cb_rate * (1 + LOCAL_USD_MARGIN)
 
-    return max(0, int(round(final)))
+    # Round UP to nearest 50 AMD
+    return max(0, math.ceil(final / 50) * 50)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -412,7 +514,10 @@ def main():
         for inter, ai in zip(batch_rows, ai_results):
             supplier_type = supplier_types.get(inter["supplier"], "international")
             price_amd = calculate_price_amd(
-                inter["price_raw"], inter["currency"], supplier_type, cb_rate
+                inter["price_raw"], inter["currency"], supplier_type, cb_rate,
+                supplier_name=inter["supplier"],
+                category=ai.get("category", ""),
+                product_name=inter["name_raw"],
             )
             output_rows.append(build_output_row(inter, ai, price_amd, supplier_type))
 
