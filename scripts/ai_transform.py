@@ -35,7 +35,7 @@ from config import (
     CATEGORY_TO_PRODUCT_TYPE,
     LOCAL_USD_MARGIN, LOCAL_AMD_MARGIN,
     INTERMEDIATE_CSV, OUTPUT_CSV, CATEGORIES,
-    SUPPLIERS_CSV,
+    SUPPLIERS_CSV, DELIVERY_TIMES_CSV,
 )
 
 from google import genai
@@ -66,6 +66,26 @@ def load_supplier_types(path: str) -> dict:
         for row in csv.DictReader(f):
             types[row["supplier_name"].strip()] = row["type"].strip()
     return types
+
+
+def load_delivery_times(path: str) -> dict:
+    """Return {"Europe (Air)": "14-21 дней", ...} from delivery_times.csv."""
+    times = {}
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        for row in csv.DictReader(f):
+            key = row["Region (Shipping method)"].strip()
+            times[key] = row["Delivery time"].strip()
+    return times
+
+
+def get_intl_eta(supplier_name: str, category: str, product_name: str,
+                 delivery_times: dict) -> str:
+    """Look up delivery time for an international product based on its shipping route."""
+    region    = SUPPLIER_REGIONS.get(supplier_name, SUPPLIER_REGIONS_DEFAULT)
+    prod_type = detect_product_type(category, product_name)
+    _, _, _, ship_mode, _ = INTL_PRODUCT_SPECS.get(prod_type, INTL_PRODUCT_SPECS["Default"])
+    key = f"{region} ({ship_mode.capitalize()})"
+    return delivery_times.get(key, "14-21 дней")   # fallback if key not found
 
 
 def detect_product_type(category: str, name: str) -> str:
@@ -435,7 +455,8 @@ _CAPACITY_RE = re.compile(r'^\d+\s*(GB|MB|TB|KB)$', re.IGNORECASE)
 
 
 def build_output_row(inter: dict, ai: dict, price_amd: int,
-                     supplier_type: str = "international") -> dict:
+                     supplier_type: str = "international",
+                     eta: str = "") -> dict:
     brand_py = inter["brand_raw"]
     # If the Python-extracted brand looks like a capacity value, fall back to
     # Gemini's brand (which can infer it from SKU prefixes like KVR → Kingston).
@@ -453,7 +474,7 @@ def build_output_row(inter: dict, ai: dict, price_amd: int,
         "sku":                  (ai.get("sku")  or inter["model"]).strip(),
         "price":                price_amd,
         "stock":                stock,
-        "eta":                  inter["eta"],
+        "eta":                  eta if eta else inter["eta"],
         "description":          "",
         "availableQuantity":    inter["availableQuantity"],
         "moq":                  inter["moq"],
@@ -488,6 +509,7 @@ def main():
 
     # Supplier type map
     supplier_types = load_supplier_types(SUPPLIERS_CSV)
+    delivery_times = load_delivery_times(DELIVERY_TIMES_CSV)
 
     # Process in batches
     output_rows = []
@@ -519,7 +541,16 @@ def main():
                 category=ai.get("category", ""),
                 product_name=inter["name_raw"],
             )
-            output_rows.append(build_output_row(inter, ai, price_amd, supplier_type))
+            if supplier_type == "international":
+                eta = get_intl_eta(
+                    inter["supplier"],
+                    ai.get("category", ""),
+                    inter["name_raw"],
+                    delivery_times,
+                )
+            else:
+                eta = inter["eta"]   # local suppliers keep their suppliers.csv value
+            output_rows.append(build_output_row(inter, ai, price_amd, supplier_type, eta))
 
         # Small delay to avoid rate-limiting
         if batch_idx < n_batches - 1:

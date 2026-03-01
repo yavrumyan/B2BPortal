@@ -168,12 +168,13 @@ AI_BATCH_SIZE  = 50          # products per API call
 _SCRIPTS_DIR = pathlib.Path(__file__).parent
 _ROOT_DIR    = _SCRIPTS_DIR.parent
 
-RAW_CSV          = str(_ROOT_DIR    / "raw_product_export_data.csv")
-SUPPLIERS_CSV    = str(_SCRIPTS_DIR / "suppliers.csv")
-BRANDS_CSV       = str(_SCRIPTS_DIR / "brands.csv")
-INTERMEDIATE_CSV = str(_SCRIPTS_DIR / "intermediate.csv")
-OUTPUT_CSV       = str(_SCRIPTS_DIR / "output_import.csv")
-ERROR_LOG        = str(_SCRIPTS_DIR / "parse_errors.csv")
+RAW_CSV            = str(_ROOT_DIR    / "raw_product_export_data.csv")
+SUPPLIERS_CSV      = str(_SCRIPTS_DIR / "suppliers.csv")
+BRANDS_CSV         = str(_SCRIPTS_DIR / "brands.csv")
+DELIVERY_TIMES_CSV = str(_SCRIPTS_DIR / "delivery_times.csv")
+INTERMEDIATE_CSV   = str(_SCRIPTS_DIR / "intermediate.csv")
+OUTPUT_CSV         = str(_SCRIPTS_DIR / "output_import.csv")
+ERROR_LOG          = str(_SCRIPTS_DIR / "parse_errors.csv")
 
 # ── Stock thresholds (international suppliers only) ───────────────────────────
 # Local suppliers are always set to "in_stock" regardless of quantity.
