@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Helmet } from "react-helmet-async";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -37,7 +38,13 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <>
+      <Helmet>
+        <title>Войти | CHIP Technologies B2B</title>
+        <meta name="description" content="Войдите в B2B-портал CHIP Technologies для доступа к оптовым ценам на IT-оборудование." />
+        <link rel="canonical" href="https://b2b.chip.am/login" />
+      </Helmet>
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="text-2xl">Вход в систему</CardTitle>
@@ -102,5 +109,6 @@ export default function Login() {
         </CardContent>
       </Card>
     </div>
+    </>
   );
 }

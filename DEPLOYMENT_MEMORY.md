@@ -1,5 +1,5 @@
 # B2B Portal – Hostinger Deployment Session Memory
-_Last updated: 2026-02-28 — **DEPLOYMENT SUCCESSFUL ✅**_
+_Last updated: 2026-03-07 — **DEPLOYMENT SUCCESSFUL ✅**_
 
 ---
 
@@ -263,11 +263,18 @@ python scripts/ai_transform.py         # Step 2 (full run): → output_import.cs
 ```
 
 **Files:**
-- `scripts/suppliers.csv` — editable supplier registry (add new suppliers here, no code changes needed)
-- `scripts/config.py` — all tunable rates + Gemini API key + CB rate URL + file paths
+- `scripts/suppliers.csv` — editable supplier registry (name, type, region, currency, visibleCustomerTypes)
+- `scripts/delivery_times.csv` — maps `"Region (Shipping method)"` → ETA string (e.g. `"Europe (Air)"` → `"14-21 дней"`)
+- `scripts/config.py` — all tunable rates + API keys + CB rate URL + file paths + `INTL_REGIONS` / `INTL_PRODUCT_SPECS`
 - `scripts/preprocess.py` — Step 1: parse raw CSV with misalignment recovery, filter/map fields
-- `scripts/ai_transform.py` — Step 2: fetch live CB rate, Gemini name/SKU/category, compute AMD price
+- `scripts/ai_transform.py` — Step 2: CB rate, Gemini normalisation, AMD price calc, MOQ, ETA, output
 - `scripts/requirements.txt` — `google-generativeai>=0.7.0`, `requests>=2.31.0`
+
+**Output files** (all in `scripts/`, UTF-8 BOM, open fine in Windows Excel/Notepad):
+- `output_import.csv` / `output_import_test.csv` — ready to import into portal
+- `price_debug.csv` / `price_debug_test.csv` — audit log with all pricing components per product
+- `intermediate.csv` — intermediate (Step 1 → Step 2 handoff)
+- `parse_errors.csv` — rows skipped by preprocess.py
 
 **Raw CSV format** (`raw_product_export_data.csv`):
 ```
@@ -276,33 +283,171 @@ Date, Source, Supplier, Category, Brand, Model, Name, Price, Currency, Stock, MO
 ⚠️ DG and Compstyle LLC rows have unescaped commas in the Name field — `preprocess.py` handles
 this with anchor detection (scans right-to-left for known Currency value "USD"/"AMD").
 
-**Suppliers (3 currently; will grow to 20+):**
-| Supplier | Type | Currency | ETA | Visibility |
+**Suppliers (registered in `suppliers.csv`; will grow to 20+):**
+| Supplier | Type | Region | Currency | Visibility |
 |---|---|---|---|---|
-| Proks SIA | international | USD | 14-21 дней | all 3 customer types |
-| DG | local | USD | 1-2 дня | корпоративный + гос. учреждение |
-| Compstyle LLC | local | AMD | 1-2 дня | корпоративный + гос. учреждение |
+| Proks SIA | international | Europe | USD | all 3 customer types |
+| HubX | international | America | USD | all 3 customer types |
+| Phonix | international | America | USD | all 3 customer types |
+| Summit Sincerity Global LTD | international | China | USD | all 3 customer types |
+| GHz Service S.r.l. | international | Europe | USD | all 3 customer types |
+| DG | local | Armenia | USD | корпоративный + гос. учреждение |
+| Compstyle LLC | local | Armenia | AMD | корпоративный + гос. учреждение |
+| (others) | local | Armenia | AMD/USD | корпоративный + гос. учреждение |
 
-**Price formulas (in `config.py` — ⚠️ review margins before running):**
+**Price formulas (current, in `config.py` + `ai_transform.py`):**
 ```
-international: price_usd × (1+SHIPPING 0.07) × (1+VAT 0.20) × (1+CUSTOMS 0.05) × cb_rate × (1+MARGIN 0.20)
-local USD:     price_usd × cb_rate × (1+MARGIN 0.15)
-local AMD:     price_amd × (1+MARGIN 0.15)
-cb_rate:       fetched live from https://cb.am/latest.json.php → float(data["USD"]) AMD per 1 USD
+international:
+  product_type detected from AI-normalised name prefix (e.g. "HDD ..." → HDD specs)
+  region loaded from suppliers.csv "region" column (e.g. "Europe", "America", "China")
+  F   = weight_kg × rate_per_kg  OR  volume_cbm × rate_per_cbm  (from INTL_REGIONS)
+  CD  = price_usd × duty_rate  (if customs_applicable)
+  CBF = (price_usd + F + CD) × INTL_CBF_RATE (0.01)  (if customs_applicable)
+  TLC = price_usd + F + CD + CBF
+  DP_USD = TLC × (1 + INTL_VAT_RATE 0.20 + INTL_BTF_RATE 0.005) × (1 + margin%)
+  final_amd = DP_USD × cb_rate  → rounded UP to nearest 50 AMD
+
+local USD:  price_usd × cb_rate × (1 + LOCAL_USD_MARGIN 0.05) → rounded UP to nearest 50 AMD
+local AMD:  price_amd × (1 + LOCAL_AMD_MARGIN 0.05) → rounded UP to nearest 50 AMD
+cb_rate:    fetched live from https://cb.am/latest.json.php → float(data["USD"]) AMD per 1 USD
+```
+
+**MOQ rules (international suppliers only):**
+```
+raw = 5000.0 / price_usd   (target: $5,000 minimum order value per line)
+raw < 1  → MOQ = 1
+raw < 2  → MOQ = 2
+raw < 3  → MOQ = 3
+raw < 4  → MOQ = 4
+raw ≥ 4  → MOQ = ceil(raw / 5) × 5   (nearest multiple of 5, e.g. 41.29 → 45)
+Stock cap: if availableQuantity < MOQ → MOQ = availableQuantity
+If supplier already set MOQ > 1 in raw data → kept unchanged (stock cap still applies)
+```
+
+**ETA rules:**
+```
+international: region from suppliers.csv + ship_mode from INTL_PRODUCT_SPECS
+               → key "Region (Ship mode)" looked up in delivery_times.csv
+               e.g. HubX router (America, ground) → no "America (Ground)" row exists
+               → falls back to alternate mode → "America (Sea)" → "65-90 дней"
+local:         always "Armenia (Local)" from delivery_times.csv → "1-2 дня"
 ```
 
 **Gemini API:** `gemini-2.5-flash-lite` via `google-generativeai` SDK
 - Key in `config.py` (`GEMINI_API_KEY`)
 - 50 products per batch call; 3-retry with backoff; fallback on failure
-- Returns `name` (clean English ≤80 chars), `sku` (cleaned part number), `category` (from 19-item list)
+- Returns `name` (English, starts with ProductType prefix e.g. "HDD", "SSD", "RAM"), `sku`, `category`
+- AI-normalised `name` is used as input to `detect_product_type()` for pricing — the leading
+  word(s) are matched against `_AI_PREFIX_MAP` in `ai_transform.py` (62 entries)
 
-**Stock mapping:**
+**Product type detection (`detect_product_type()` in `ai_transform.py`):**
+1. Try 2-word prefix from AI name against `_AI_PREFIX_MAP` (e.g. `"access point"` → Routers)
+2. Try 1-word prefix (e.g. `"hdd"` → HDD, `"microsd"` → Flash Drives/Memory Cards)
+3. Fall back to category keyword scan (handles `"camera"` ambiguity etc.)
+4. Fall back to `CATEGORY_TO_PRODUCT_TYPE[category]` default
+
+**Stock / filter rules:**
+- Zero-price products (`price_amd == 0`) → skipped entirely, not written to output
 - Local suppliers → always `in_stock`
-- International (Proks SIA): Stock 1–9 → `low_stock`; Stock ≥ 10 → `in_stock`
-- Zero-stock products excluded entirely from output
+- International: Stock 1–9 → `low_stock`; Stock ≥ 10 → `in_stock`
+- Empty stock field → `availableQuantity = ceil(5000 / price_usd)` (estimated from $5k budget)
+  This also feeds the MOQ stock cap, so MOQ is naturally bounded by estimated availability.
 
-**⚠️ TODO before first run:** Adjust margin rates in `scripts/config.py`:
-`INTL_SHIPPING_RATE`, `INTL_CUSTOMS_RATE`, `INTL_MARGIN`, `LOCAL_USD_MARGIN`, `LOCAL_AMD_MARGIN`
+**`price_debug.csv` columns** (audit log, one row per product):
+`supplier | ai_name | name_raw | sku | category | product_type | region | ship_mode | customs |`
+`price_usd | weight_kg | freight_usd | duty_usd | broker_fee_usd | dp_usd | margin_pct | price_amd | eta`
+
+## What Was Done in This Session (2026-03-02)
+
+### CSV pipeline — major rework of `scripts/`
+
+1. **International pricing formula replaced** — old flat-rate formula removed.
+   New formula uses per-product-type specs + per-region freight rates from
+   `international_suppliers_rates.xlsx` (now encoded in `config.py`):
+   - `INTL_REGIONS` — 7 regions × air/ground/sea freight rates + customs flag
+   - `INTL_PRODUCT_SPECS` — 53 product types × (weight, volume, duty%, ship_mode, margin%)
+   - `SUPPLIER_REGIONS` — maps supplier name → region (`{"Proks SIA": "Europe"}`)
+   - Formula: `DP_USD = [P + F + CD + CBF] × (1 + VAT + BTF) × (1 + margin)`; `final_amd = DP_USD × cb_rate`
+   - All final AMD prices rounded UP to nearest 50 AMD via `math.ceil(final / 50) * 50`
+   - Local margins corrected: `LOCAL_USD_MARGIN = LOCAL_AMD_MARGIN = 0.05` (was 0.15)
+
+2. **FileNotFoundError fix** — `config.py` paths now use `pathlib.Path(__file__).parent` so
+   scripts can be run from any working directory (repo root or `scripts/`).
+
+3. **UTF-8 BOM encoding** — all `open()` calls in `preprocess.py` and `ai_transform.py`
+   changed from `encoding="utf-8"` → `"utf-8-sig"`. Cyrillic now displays correctly in
+   Windows Excel/Notepad without garbling.
+
+4. **Per-product ETA from `delivery_times.csv`** — new file maps `"Region (Shipping method)"`
+   → delivery string. International products get ETA based on their actual shipping mode
+   (e.g. Proks SIA laptop → `"Europe (Air)"` → `"14-21 дней"`; monitor → `"Europe (Ground)"`
+   → `"22-35 дней"`). Local suppliers keep their static ETA from `suppliers.csv`.
+
+5. **`price_debug.csv` audit log** — written alongside `output_import.csv` on every run
+   (`price_debug_test.csv` in `--test` mode). Shows every pricing component per product:
+   `ai_name`, `name_raw`, `sku`, `category`, `product_type`, `region`, `ship_mode`, `customs`,
+   `price_usd`, `weight_kg`, `freight_usd`, `duty_usd`, `broker_fee_usd`, `dp_usd`,
+   `margin_pct`, `price_amd`, `eta`.
+
+6. **AI-prefix based product type detection** — `detect_product_type()` now tries the AI-
+   normalised product name first (e.g. `"HDD Seagate IronWolf | 4TB"` → first word `"hdd"` →
+   `HDD`) before falling back to category keyword scan. Added `_AI_PREFIX_MAP` with 62 entries
+   covering all ProductType prefixes that Gemini produces. The processing loop now computes
+   `ai_name = ai.get("name") or inter["name_raw"]` and passes it to `calculate_price_amd()`,
+   `get_intl_eta()`, and `build_price_debug_row()`. Previously all three received `inter["name_raw"]`
+   (raw supplier text) → many products fell through to wrong fallback (e.g. Seagate IronWolf → RAM).
+
+7. **MicroSD / USB flash drive fix** — Gemini prefixes these as `"microSD ..."` and
+   `"USB Flash ..."` respectively. Added `"microsd"` and `"usb flash"` to `_AI_PREFIX_MAP`
+   → both now correctly map to `"Flash Drives/Memory Cards"` instead of `"External HDD/SSD"`.
+   Also added `"ai_name"` column to `price_debug.csv` for self-diagnosable future issues.
+
+8. **MOQ generation for international suppliers** — `_compute_intl_moq()` added.
+   Applies when supplier MOQ is blank / 0 / 1 (i.e. not explicitly set). Formula:
+   `raw = 5000 / price_usd`; then `raw < 1→1`, `< 2→2`, `< 3→3`, `< 4→4`, `≥ 4→ceil(raw/5)×5`.
+   Stock cap: `if availableQuantity < MOQ → MOQ = availableQuantity`.
+   Local suppliers are unaffected.
+
+9. **Zero-price filter** — products where `price_amd == 0` (blank/zero/invalid price in raw
+   data) are now skipped with a console warning and excluded from both output files.
+
+## What Was Done in This Session (2026-03-07)
+
+### CSV pipeline — ETA routing + region refactor + empty-stock estimation
+
+1. **Region-driven ETA replaced hardcoded `SUPPLIER_REGIONS` dict** — `config.py` previously
+   had a hardcoded `SUPPLIER_REGIONS = {"Proks SIA": "Europe"}` dict with a single entry and
+   a Europe fallback, so all new suppliers (HubX, Phonix, Summit Sincerity, GHz Service) were
+   silently routed through Europe rates. `suppliers.csv` already has a `region` column; the
+   system now reads it directly.
+   - `load_supplier_types()` → renamed `load_suppliers()`, returns `(types_dict, regions_dict)`
+   - `SUPPLIER_REGIONS` and `SUPPLIER_REGIONS_DEFAULT` removed from `config.py`
+   - `get_intl_eta(supplier_name, ...)` → `get_intl_eta(region, ...)` (region passed directly)
+   - `calculate_price_amd(supplier_name=..., ...)` → `calculate_price_amd(region=..., ...)`
+   - `build_price_debug_row(...)` also receives `region=` kwarg
+   - Main loop: `region = supplier_regions.get(inter["supplier"], "Europe")` computed once per row
+
+2. **Local supplier ETA now from `delivery_times.csv`** — previously `eta = inter["eta"]`
+   (pulled from `suppliers.csv`'s now-removed `eta` column, always a stale static string).
+   Now: `eta = delivery_times.get("Armenia (Local)", "1-2 дня")` — consistent with the
+   international lookup path and not dependent on `suppliers.csv` data.
+   - `eta` column removed from `suppliers.csv`, `INTERMEDIATE_HEADERS`, `DEFAULT_SUPPLIER`,
+     and the row-building dict in `preprocess.py`
+   - `inter["eta"]` fallback removed from `build_output_row()` in `ai_transform.py`
+
+3. **"America (Ground)" → Sea fallback in ETA lookup** — `get_intl_eta()` was returning the
+   hardcoded `"14-21 дней"` default for any region+mode key not in `delivery_times.csv`
+   (e.g. "America (Ground)" which doesn't exist — only Air and Sea do). Now mirrors the same
+   fallback already present in `calculate_price_amd()`: if the primary key is missing, try the
+   alternate mode (`ground→sea`, `sea→ground`); only use the hardcoded default as last resort.
+
+4. **Empty stock → estimated `availableQuantity`** — when a supplier leaves the Stock column
+   blank (they provide no stock info, not zero stock), `preprocess.py` now computes
+   `availableQuantity = ceil(5000 / price_usd)` instead of writing 0.
+   - `import math` added to `preprocess.py`
+   - `parse_stock_quantity()` returns `None` for blank/non-numeric values; the call site now
+     checks for `None` explicitly and applies the formula (was `... or 0` which silently zeroed)
+   - Result feeds naturally into the MOQ stock cap in `ai_transform.py`
 
 ---
 

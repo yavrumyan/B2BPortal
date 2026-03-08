@@ -1,3 +1,4 @@
+import { Helmet } from "react-helmet-async";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -75,7 +76,13 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <>
+      <Helmet>
+        <title>Регистрация | CHIP Technologies B2B</title>
+        <meta name="description" content="Зарегистрируйтесь в B2B-портале CHIP Technologies и получите доступ к оптовым ценам на IT-оборудование для вашей компании." />
+        <link rel="canonical" href="https://b2b.chip.am/register" />
+      </Helmet>
+      <div className="min-h-screen bg-background">
       <div className="border-b">
         <div className="container mx-auto px-4 py-4">
           <Button
@@ -345,5 +352,6 @@ export default function Register() {
         </div>
       </div>
     </div>
+    </>
   );
 }

@@ -13,6 +13,7 @@ Run from repo root:
 """
 
 import csv
+import math
 import re
 import sys
 import os
@@ -47,7 +48,6 @@ def load_supplier_config(path: str) -> dict:
             config[row["supplier_name"].strip()] = {
                 "type":                 row["type"].strip(),
                 "currency":             row["currency"].strip(),
-                "eta":                  row["eta"].strip(),
                 "visibleCustomerTypes": row["visibleCustomerTypes"].strip(),
             }
     return config
@@ -218,13 +218,12 @@ def is_zero_stock(row: dict) -> bool:
 INTERMEDIATE_HEADERS = [
     "supplier", "brand_raw", "model", "name_raw", "category_raw",
     "price_raw", "currency", "availableQuantity", "moq",
-    "stock", "eta", "visibleCustomerTypes",
+    "stock", "visibleCustomerTypes",
 ]
 
 DEFAULT_SUPPLIER = {
     "type":                 "international",
     "currency":             "USD",
-    "eta":                  "14-21 дней",
     "visibleCustomerTypes": "дилер;корпоративный;гос. учреждение",
 }
 
@@ -275,7 +274,15 @@ def main():
             cfg = DEFAULT_SUPPLIER.copy()
 
         # ── Field mapping ──
-        quantity = parse_stock_quantity(row.get("Stock", "0")) or 0
+        qty_parsed = parse_stock_quantity(row.get("Stock", ""))
+        if qty_parsed is None:
+            # Supplier provided no stock info — estimate as ceil(5000 / price)
+            try:
+                price_val = float(row.get("Price", "0").strip())
+                qty_parsed = math.ceil(5000.0 / price_val) if price_val > 0 else 0
+            except (ValueError, TypeError):
+                qty_parsed = 0
+        quantity = qty_parsed
         moq      = parse_moq(row.get("MOQ", "NO"))
         stock    = map_stock_status(quantity, cfg["type"])
         brand    = extract_brand(row.get("Brand", ""), row.get("Name", ""), known_brands)
@@ -291,7 +298,6 @@ def main():
             "availableQuantity":    quantity,
             "moq":                  moq,
             "stock":                stock,
-            "eta":                  cfg["eta"],
             "visibleCustomerTypes": cfg["visibleCustomerTypes"],
         })
 

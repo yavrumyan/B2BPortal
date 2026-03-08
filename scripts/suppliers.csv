@@ -1,4 +1,17 @@
-supplier_name,type,currency,eta,visibleCustomerTypes
-Proks SIA,international,USD,14-21 дней,дилер;корпоративный;гос. учреждение
-DG,local,USD,1-2 дня,корпоративный;гос. учреждение
-Compstyle LLC,local,AMD,1-2 дня,корпоративный;гос. учреждение
+﻿supplier_name,type,region,currency,visibleCustomerTypes
+Proks SIA,international,Europe,USD,дилер;корпоративный;гос. учреждение
+DG,local,Armenia,USD,корпоративный;гос. учреждение
+Compstyle LLC,local,Armenia,AMD,корпоративный;гос. учреждение
+ArmIT,local,Armenia,AMD,корпоративный;гос. учреждение
+Brand Computers,local,Armenia,AMD,корпоративный;гос. учреждение
+Complanet,local,Armenia,USD,корпоративный;гос. учреждение
+Elcore,local,Armenia,AMD,корпоративный;гос. учреждение
+HubX,international,America,USD,дилер;корпоративный;гос. учреждение
+ITPlaza,local,Armenia,USD,корпоративный;гос. учреждение
+IT-Trading,local,Armenia,USD,корпоративный;гос. учреждение
+Meta LLC,local,Armenia,AMD/USD,корпоративный;гос. учреждение
+Phonix,international,America,USD,дилер;корпоративный;гос. учреждение
+Summit Sincerity Global LTD,international,China,USD,дилер;корпоративный;гос. учреждение
+X-Art,local,Armenia,AMD,корпоративный;гос. учреждение
+Yerevan Telecom,local,Armenia,AMD,корпоративный;гос. учреждение
+GHz Service S.r.l.,international,Europe,USD,дилер;корпоративный;гос. учреждение

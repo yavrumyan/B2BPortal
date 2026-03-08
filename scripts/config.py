@@ -61,7 +61,7 @@ INTL_PRODUCT_SPECS = {
     "PC PSU":                    (2.5,   0.008,  0,    "ground", 0.15),
     "Mainboards":                (1.5,   0.007,  0,    "ground", 0.15),
     "CPU":                       (0.05,  0.0002, 0,    "air",    0.08),
-    "Coolers for CPU":           (1.2,   0.006,  0,    "ground", 0.0),
+    "Coolers for CPU":           (1.2,   0.006,  0,    "ground", 0.15),
     "RAM":                       (0.1,   0.0002, 0,    "air",    0.10),
     "SSD":                       (0.1,   0.0003, 0,    "air",    0.10),
     "HDD":                       (0.6,   0.001,  0,    "air",    0.12),
@@ -101,13 +101,6 @@ INTL_PRODUCT_SPECS = {
     "Surveillance Cameras":      (0.6,   0.003,  0.05, "ground", 0.15),
     "Default":                   (1.0,   0.005,  0,    "air",    0.15),
 }
-
-# Supplier → origin region mapping.
-# Add a new entry here whenever a new international supplier is onboarded.
-SUPPLIER_REGIONS = {
-    "Proks SIA": "Europe",
-}
-SUPPLIER_REGIONS_DEFAULT = "Europe"  # fallback for unmapped international suppliers
 
 # Gemini category → Excel product type (used for freight/margin lookup).
 # Multi-value categories are further refined by detect_product_type() in ai_transform.py.
@@ -174,6 +167,7 @@ BRANDS_CSV         = str(_SCRIPTS_DIR / "brands.csv")
 DELIVERY_TIMES_CSV = str(_SCRIPTS_DIR / "delivery_times.csv")
 INTERMEDIATE_CSV   = str(_SCRIPTS_DIR / "intermediate.csv")
 OUTPUT_CSV         = str(_SCRIPTS_DIR / "output_import.csv")
+PRICE_DEBUG_CSV    = str(_SCRIPTS_DIR / "price_debug.csv")
 ERROR_LOG          = str(_SCRIPTS_DIR / "parse_errors.csv")
 
 # ── Stock thresholds (international suppliers only) ───────────────────────────

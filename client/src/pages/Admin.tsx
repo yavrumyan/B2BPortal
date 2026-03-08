@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { Helmet } from "react-helmet-async";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import AdminSidebar from "@/components/AdminSidebar";
@@ -404,7 +405,12 @@ export default function Admin() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <>
+      <Helmet>
+        <title>Администрирование | CHIP Technologies B2B</title>
+        <meta name="robots" content="noindex, nofollow" />
+      </Helmet>
+      <div className="flex h-screen overflow-hidden bg-background">
       <AdminSidebar
         activeSection={activeSection}
         onSectionChange={handleSectionChange}
@@ -870,6 +876,7 @@ export default function Admin() {
         </main>
       </div>
     </div>
+    </>
   );
 }
 

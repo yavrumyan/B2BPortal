@@ -1,3 +1,4 @@
+import { Helmet } from "react-helmet-async";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -264,7 +265,12 @@ export default function OrderDetail() {
   });
 
   return (
-    <div className="container mx-auto p-6">
+    <>
+      <Helmet>
+        <title>Заказ | CHIP Technologies B2B</title>
+        <meta name="robots" content="noindex, nofollow" />
+      </Helmet>
+      <div className="container mx-auto p-6">
       <Button
         variant="ghost"
         className="mb-4"
@@ -661,5 +667,6 @@ export default function OrderDetail() {
         </CardContent>
       </Card>
     </div>
+    </>
   );
 }

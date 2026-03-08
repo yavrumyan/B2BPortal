@@ -31,10 +31,9 @@ from config import (
     CB_RATE_URL,
     INTL_VAT_RATE, INTL_BTF_RATE, INTL_CBF_RATE,
     INTL_REGIONS, INTL_PRODUCT_SPECS,
-    SUPPLIER_REGIONS, SUPPLIER_REGIONS_DEFAULT,
     CATEGORY_TO_PRODUCT_TYPE,
     LOCAL_USD_MARGIN, LOCAL_AMD_MARGIN,
-    INTERMEDIATE_CSV, OUTPUT_CSV, CATEGORIES,
+    INTERMEDIATE_CSV, OUTPUT_CSV, PRICE_DEBUG_CSV, CATEGORIES,
     SUPPLIERS_CSV, DELIVERY_TIMES_CSV,
 )
 
@@ -59,13 +58,20 @@ def fetch_cb_rate() -> float:
 # Price calculation
 # ─────────────────────────────────────────────────────────────────────────────
 
-def load_supplier_types(path: str) -> dict:
-    """Return {supplier_name: type} from suppliers.csv."""
+def load_suppliers(path: str) -> tuple:
+    """Return (types, regions) dicts from suppliers.csv.
+
+    types:   {supplier_name: "local" | "international"}
+    regions: {supplier_name: "Europe" | "America" | "China" | ...}
+    """
     types = {}
+    regions = {}
     with open(path, newline="", encoding="utf-8-sig") as f:
         for row in csv.DictReader(f):
-            types[row["supplier_name"].strip()] = row["type"].strip()
-    return types
+            name = row["supplier_name"].strip()
+            types[name]   = row["type"].strip()
+            regions[name] = row.get("region", "").strip() or "Europe"
+    return types, regions
 
 
 def load_delivery_times(path: str) -> dict:
@@ -78,25 +84,38 @@ def load_delivery_times(path: str) -> dict:
     return times
 
 
-def get_intl_eta(supplier_name: str, category: str, product_name: str,
+def get_intl_eta(region: str, category: str, product_name: str,
                  delivery_times: dict) -> str:
     """Look up delivery time for an international product based on its shipping route."""
-    region    = SUPPLIER_REGIONS.get(supplier_name, SUPPLIER_REGIONS_DEFAULT)
     prod_type = detect_product_type(category, product_name)
     _, _, _, ship_mode, _ = INTL_PRODUCT_SPECS.get(prod_type, INTL_PRODUCT_SPECS["Default"])
     key = f"{region} ({ship_mode.capitalize()})"
-    return delivery_times.get(key, "14-21 дней")   # fallback if key not found
+    if key in delivery_times:
+        return delivery_times[key]
+    # Region has no ground route (e.g. America/China/India) — try alternate mode
+    alt_mode = "sea" if ship_mode == "ground" else "ground"
+    alt_key  = f"{region} ({alt_mode.capitalize()})"
+    return delivery_times.get(alt_key, "14-21 дней")
 
 
 def detect_product_type(category: str, name: str) -> str:
     """Map Gemini category + product name to an INTL_PRODUCT_SPECS key.
 
-    For multi-value categories (Компоненты ПК/Серверов, Принтеры/Сканеры, etc.)
-    keyword-scans the product name to pick the most specific Excel product type.
-    Falls back to CATEGORY_TO_PRODUCT_TYPE for single-type categories.
+    When called with an AI-normalized name (e.g. "HDD Seagate IronWolf | 4TB | NAS")
+    the leading word(s) are matched against _AI_PREFIX_MAP first — this is the primary
+    and most reliable path.  Falls back to category keyword scan for ambiguous prefixes
+    (e.g. "camera") or when only a raw supplier name is available.
     """
-    n = name.lower()
+    n = name.lower().strip()
+    parts = n.split()
 
+    # ── 1. AI prefix map — try two-word prefix first, then single-word ─────────
+    if len(parts) >= 2 and f"{parts[0]} {parts[1]}" in _AI_PREFIX_MAP:
+        return _AI_PREFIX_MAP[f"{parts[0]} {parts[1]}"]
+    if parts and parts[0] in _AI_PREFIX_MAP:
+        return _AI_PREFIX_MAP[parts[0]]
+
+    # ── 2. Category keyword scan (fallback for "camera" and raw names) ─────────
     if category == "Компоненты ПК/Серверов":
         if any(k in n for k in ("cpu", "processor", "xeon", "ryzen", "core i", "процессор")):
             return "CPU"
@@ -171,7 +190,7 @@ def detect_product_type(category: str, name: str) -> str:
 
 
 def calculate_price_amd(price_raw: str, currency: str, supplier_type: str,
-                        cb_rate: float, supplier_name: str = "",
+                        cb_rate: float, region: str = "Europe",
                         category: str = "", product_name: str = "") -> int:
     """
     Convert raw supplier price to final AMD, rounded UP to nearest 50.
@@ -194,7 +213,6 @@ def calculate_price_amd(price_raw: str, currency: str, supplier_type: str,
     currency = currency.upper()
 
     if supplier_type == "international":
-        region = SUPPLIER_REGIONS.get(supplier_name, SUPPLIER_REGIONS_DEFAULT)
         prod_type = detect_product_type(category, product_name)
         weight, volume, duty_rate, ship_mode, margin = INTL_PRODUCT_SPECS.get(
             prod_type, INTL_PRODUCT_SPECS["Default"]
@@ -453,6 +471,132 @@ OUTPUT_HEADERS = [
 # e.g. "16GB", "32GB", "512MB", "1TB" — clearly not a brand name.
 _CAPACITY_RE = re.compile(r'^\d+\s*(GB|MB|TB|KB)$', re.IGNORECASE)
 
+# Maps the leading word(s) of an AI-normalized product name → INTL_PRODUCT_SPECS key.
+# Two-word prefixes are checked before single-word ones.
+# "camera" is intentionally excluded — ambiguous (surveillance/photo/video);
+# the existing category-based keyword scan handles it correctly.
+_AI_PREFIX_MAP = {
+    # ── two-word prefixes ──────────────────────────────────────────────────────
+    "access point":      "Routers",
+    "mini pc":           "Mini PCs",
+    "all-in-one":        "All-In-Ones",
+    "projection screen": "Projector Screens",
+    "external ssd":      "External HDD/SSD",
+    "external hdd":      "External HDD/SSD",
+    "flash drive":       "Flash Drives/Memory Cards",
+    "usb flash":         "Flash Drives/Memory Cards",   # Gemini: "USB Flash Samsung Bar Plus | ..."
+    "network cable":     "Network Cables",
+    "patch cord":        "Network Cables",
+    "printer label":     "Label/Barcode Printers",
+    "scanner barcode":   "Barcode Scanners",
+    # ── single-word prefixes ───────────────────────────────────────────────────
+    "ssd":          "SSD",
+    "hdd":          "HDD",
+    "ram":          "RAM",
+    "cpu":          "CPU",
+    "gpu":          "Video Cards",
+    "motherboard":  "Mainboards",
+    "psu":          "PC PSU",
+    "cooler":       "Coolers for CPU",
+    "laptop":       "Laptops",
+    "pc":           "Desktops",
+    "workstation":  "Desktops",
+    "server":       "Servers",
+    "monitor":      "Monitors",
+    "tv":           "TVs",
+    "printer":      "Printers",
+    "mfp":          "Printers",
+    "plotter":      "Printers",
+    "scanner":      "Scanners",
+    "projector":    "Projectors",
+    "projection":   "Projector Screens",
+    "screen":       "Projector Screens",
+    "ups":          "UPS",
+    "pdu":          "UPS",
+    "switch":       "Switches",
+    "router":       "Routers",
+    "firewall":     "Routers",
+    "phone":        "Smartphones",
+    "smartphone":   "Smartphones",
+    "tablet":       "Tablets",
+    "keyboard":     "Keyboards",
+    "mouse":        "Mice",
+    "speaker":      "Speakers",
+    "headset":      "Headsets",
+    "webcam":       "Webcams",
+    "gamepad":      "Gamepads",
+    "drone":        "Drones",
+    "microsd":      "Flash Drives/Memory Cards",   # Gemini: "microSD Samsung EVO Plus | ..."
+    "cable":        "Cables",
+    "adapter":      "Adapters",
+    "watch":        "Smart Gadgets",
+    "nvr":          "Surveillance Cameras",
+    "dvr":          "Surveillance Cameras",
+    "barcode":      "Barcode Scanners",
+    "label":        "Label/Barcode Printers",
+    "cash":         "Cash Drawers",
+    "pos":          "POS Systems",
+    "sfp":          "Network Cards",
+    "sfp+":         "Network Cards",
+}
+
+
+def _compute_intl_moq(raw_moq: str, price_raw: str, avail_qty: str) -> str:
+    """Generate MOQ for international suppliers that have no MOQ set.
+
+    Rule: minimum international order value = $5,000.
+    Formula: raw = 5000 / price_usd, then:
+      raw < 1  →  MOQ = 1   (single expensive unit already covers $5,000)
+      raw < 2  →  MOQ = 2
+      raw < 3  →  MOQ = 3
+      raw < 4  →  MOQ = 4
+      raw ≥ 4  →  MOQ = ceil(raw / 5) × 5  (round UP to nearest multiple of 5)
+
+    Stock cap: if availableQuantity < generated MOQ, MOQ is capped to
+    availableQuantity so buyers can't be asked to order more than is in stock.
+
+    Only kicks in when raw_moq is blank, "0", or "1" (i.e. not explicitly
+    specified by the supplier).  If the supplier already set a MOQ > 1 it
+    is kept unchanged (but still capped by available stock).
+
+    Examples:
+      $6,000 server  →  raw = 0.83  →  MOQ = 1
+      $3,000 switch  →  raw = 1.67  →  MOQ = 2
+      $1,200 NIC     →  raw = 4.17  →  MOQ = 5
+      $121.10 SSD    →  raw = 41.29 →  MOQ = 45  (or less if stock < 45)
+    """
+    try:
+        moq_val = int(float(raw_moq)) if raw_moq else 0
+    except (ValueError, TypeError):
+        moq_val = 0
+
+    if moq_val > 1:
+        moq = moq_val           # explicitly set by supplier — keep it
+    else:
+        try:
+            price = float(price_raw)
+        except (ValueError, TypeError):
+            return raw_moq or "1"
+
+        if price <= 0:
+            return raw_moq or "1"
+
+        raw = 5000.0 / price
+        if raw < 4:
+            moq = math.ceil(raw)        # 1, 2, 3, or 4
+        else:
+            moq = math.ceil(raw / 5) * 5   # 5, 10, 15, …
+
+    # Cap by available stock: never ask for more units than the supplier has
+    try:
+        qty = int(float(avail_qty)) if avail_qty else 0
+        if 0 < qty < moq:
+            moq = qty
+    except (ValueError, TypeError):
+        pass
+
+    return str(moq)
+
 
 def build_output_row(inter: dict, ai: dict, price_amd: int,
                      supplier_type: str = "international",
@@ -474,14 +618,108 @@ def build_output_row(inter: dict, ai: dict, price_amd: int,
         "sku":                  (ai.get("sku")  or inter["model"]).strip(),
         "price":                price_amd,
         "stock":                stock,
-        "eta":                  eta if eta else inter["eta"],
+        "eta":                  eta,
         "description":          "",
         "availableQuantity":    inter["availableQuantity"],
-        "moq":                  inter["moq"],
+        "moq":                  _compute_intl_moq(inter["moq"], inter["price_raw"],
+                                                  inter["availableQuantity"])
+                                if supplier_type == "international"
+                                else inter["moq"],
         "brand":                (ai.get("brand") or brand).strip(),
         "category":             ai.get("category") or "",
         "visibleCustomerTypes": inter["visibleCustomerTypes"],
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Price debug log
+# ─────────────────────────────────────────────────────────────────────────────
+
+DEBUG_HEADERS = [
+    "supplier", "ai_name", "name_raw", "sku", "category", "product_type",
+    "region", "ship_mode", "customs",
+    "price_usd", "weight_kg", "freight_usd", "duty_usd", "broker_fee_usd",
+    "dp_usd", "margin_pct", "price_amd", "eta",
+]
+
+
+def build_price_debug_row(inter: dict, ai: dict, price_amd: int,
+                          supplier_type: str, eta: str, cb_rate: float,
+                          region: str = "") -> dict:
+    """Build one audit row for price_debug.csv, exposing all pricing components."""
+    category     = ai.get("category", "")
+    # Use AI-normalized name for type detection (same as the pricing path),
+    # but keep the original raw name visible in the name_raw column.
+    product_name = ai.get("name") or inter["name_raw"]
+
+    base = {
+        "supplier":      inter["supplier"],
+        "ai_name":       product_name,        # AI-normalized name used for type detection
+        "name_raw":      inter["name_raw"],   # always show raw supplier text
+        "sku":           (ai.get("sku") or inter.get("model", "")).strip(),
+        "category":      category,
+        "price_amd":     price_amd,
+        "eta":           eta,
+    }
+
+    if supplier_type == "international":
+        prod_type  = detect_product_type(category, product_name)
+        weight, volume, duty_rate, ship_mode, margin = INTL_PRODUCT_SPECS.get(
+            prod_type, INTL_PRODUCT_SPECS["Default"]
+        )
+
+        region_data = INTL_REGIONS.get(region, INTL_REGIONS["Europe"])
+        mode_data   = region_data.get(ship_mode)
+        if mode_data is None:
+            alt       = "sea" if ship_mode == "ground" else "ground"
+            mode_data = region_data.get(alt, list(region_data.values())[0])
+        rate_kg, rate_cbm, customs_applicable = mode_data
+
+        try:
+            price_usd = float(inter["price_raw"])
+        except (ValueError, TypeError):
+            price_usd = 0.0
+
+        F   = weight * rate_kg if rate_kg else volume * rate_cbm
+        CD  = price_usd * duty_rate if (customs_applicable and duty_rate > 0) else 0.0
+        CBF = (price_usd + F + CD) * INTL_CBF_RATE if customs_applicable else 0.0
+        TLC    = price_usd + F + CD + CBF
+        DP_USD = TLC * (1 + INTL_VAT_RATE + INTL_BTF_RATE) * (1 + margin)
+
+        base.update({
+            "product_type":   prod_type,
+            "region":         region,
+            "ship_mode":      ship_mode,
+            "customs":        "yes" if customs_applicable else "no",
+            "price_usd":      round(price_usd, 4),
+            "weight_kg":      weight,
+            "freight_usd":    round(F, 4),
+            "duty_usd":       round(CD, 4),
+            "broker_fee_usd": round(CBF, 4),
+            "dp_usd":         round(DP_USD, 4),
+            "margin_pct":     f"{int(margin * 100)}%",
+        })
+    else:
+        currency = inter.get("currency", "USD").upper()
+        if currency == "AMD":
+            margin_pct = f"{int(LOCAL_AMD_MARGIN * 100)}%"
+        else:
+            margin_pct = f"{int(LOCAL_USD_MARGIN * 100)}%"
+        base.update({
+            "product_type":   "local",
+            "region":         "local",
+            "ship_mode":      "",
+            "customs":        "no",
+            "price_usd":      inter.get("price_raw", ""),
+            "weight_kg":      "",
+            "freight_usd":    "",
+            "duty_usd":       "",
+            "broker_fee_usd": "",
+            "dp_usd":         "",
+            "margin_pct":     margin_pct,
+        })
+
+    return base
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -507,12 +745,13 @@ def main():
     # Live exchange rate
     cb_rate = fetch_cb_rate()
 
-    # Supplier type map
-    supplier_types = load_supplier_types(SUPPLIERS_CSV)
+    # Supplier type and region maps (loaded from suppliers.csv)
+    supplier_types, supplier_regions = load_suppliers(SUPPLIERS_CSV)
     delivery_times = load_delivery_times(DELIVERY_TIMES_CSV)
 
     # Process in batches
     output_rows = []
+    debug_rows  = []
     n_batches = math.ceil(len(rows) / AI_BATCH_SIZE)
 
     for batch_idx in range(n_batches):
@@ -535,22 +774,28 @@ def main():
 
         for inter, ai in zip(batch_rows, ai_results):
             supplier_type = supplier_types.get(inter["supplier"], "international")
+            region        = supplier_regions.get(inter["supplier"], "Europe")
+            # Use AI-normalized name for product type detection: it starts with
+            # an unambiguous English prefix ("HDD ...", "SSD ...", etc.) that
+            # _AI_PREFIX_MAP can match exactly. Fall back to raw name if AI
+            # returned nothing (e.g. Gemini failure / fallback path).
+            ai_name = ai.get("name") or inter["name_raw"]
             price_amd = calculate_price_amd(
                 inter["price_raw"], inter["currency"], supplier_type, cb_rate,
-                supplier_name=inter["supplier"],
+                region=region,
                 category=ai.get("category", ""),
-                product_name=inter["name_raw"],
+                product_name=ai_name,
             )
+            if price_amd == 0:
+                print(f"  ⚠  Skipping zero-price: {inter['name_raw'][:70]}")
+                continue
+
             if supplier_type == "international":
-                eta = get_intl_eta(
-                    inter["supplier"],
-                    ai.get("category", ""),
-                    inter["name_raw"],
-                    delivery_times,
-                )
+                eta = get_intl_eta(region, ai.get("category", ""), ai_name, delivery_times)
             else:
-                eta = inter["eta"]   # local suppliers keep their suppliers.csv value
+                eta = delivery_times.get("Armenia (Local)", "1-2 дня")
             output_rows.append(build_output_row(inter, ai, price_amd, supplier_type, eta))
+            debug_rows.append(build_price_debug_row(inter, ai, price_amd, supplier_type, eta, cb_rate, region=region))
 
         # Small delay to avoid rate-limiting
         if batch_idx < n_batches - 1:
@@ -563,9 +808,17 @@ def main():
         writer.writeheader()
         writer.writerows(output_rows)
 
+    # Write price debug log
+    debug_path = PRICE_DEBUG_CSV if not args.test else PRICE_DEBUG_CSV.replace(".csv", "_test.csv")
+    with open(debug_path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(f, fieldnames=DEBUG_HEADERS)
+        writer.writeheader()
+        writer.writerows(debug_rows)
+
     print(f"\n{'─'*50}")
     print(f"Products processed  : {len(output_rows)}")
     print(f"Output              : {out_path}")
+    print(f"Price debug log     : {debug_path}")
     print(f"{'─'*50}")
     print("\nNext step: review output_import.csv then import into b2b.chip.am portal.")
 

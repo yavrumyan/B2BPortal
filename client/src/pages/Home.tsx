@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { Helmet } from "react-helmet-async";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import Header from "@/components/Header";
@@ -761,7 +762,13 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <>
+      <Helmet>
+        <title>CHIP Technologies B2B — Оптовый каталог IT-оборудования</title>
+        <meta name="description" content="Оптовые цены на ноутбуки, серверы, мониторы, сетевое оборудование и комплектующие. Портал для корпоративных клиентов CHIP Technologies." />
+        <link rel="canonical" href="https://b2b.chip.am/" />
+      </Helmet>
+      <div className="min-h-screen bg-background">
       <Header
         cartItemCount={cartItems.reduce((sum, item) => sum + item.quantity, 0)}
         onCartClick={() => setIsCartOpen(true)}
@@ -1240,5 +1247,6 @@ export default function Home() {
         onCheckout={handleCheckout}
       />
     </div>
+    </>
   );
 }
