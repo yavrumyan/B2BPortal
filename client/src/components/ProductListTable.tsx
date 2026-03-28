@@ -1,10 +1,11 @@
 
 import { useState, useEffect } from "react";
-import { ShoppingCart, Plus, Minus, X, Save, ArrowUp, ArrowDown } from "lucide-react";
+import { ShoppingCart, Plus, Minus, X, Save, ArrowUp, ArrowDown, Loader2, ImageOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { Product } from "@shared/schema";
 import { calculatePrice } from "@shared/utils";
 
@@ -39,6 +40,18 @@ export default function ProductListTable({
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  const [skuPopup, setSkuPopup] = useState<{ sku: string; images: string[]; loading: boolean } | null>(null);
+
+  const openSkuImages = async (sku: string) => {
+    setSkuPopup({ sku, images: [], loading: true });
+    try {
+      const res = await fetch(`/api/image-search?sku=${encodeURIComponent(sku)}`);
+      const data = await res.json();
+      setSkuPopup({ sku, images: data.images || [], loading: false });
+    } catch {
+      setSkuPopup({ sku, images: [], loading: false });
+    }
+  };
 
   // Reset to page 1 whenever the search term changes
   useEffect(() => { setCurrentPage(1); }, [searchTerm]);
@@ -214,9 +227,14 @@ export default function ProductListTable({
               {product.name}
             </div>
             {product.sku && (
-              <div className="text-xs text-muted-foreground" data-testid={`text-sku-${product.id}`}>
+              <button
+                className="text-xs text-muted-foreground hover:text-primary hover:underline text-left"
+                onClick={() => openSkuImages(product.sku!)}
+                title="Нажмите для поиска изображений"
+                data-testid={`text-sku-${product.id}`}
+              >
                 {product.sku}
-              </div>
+              </button>
             )}
             {product.brand && (
               <div className="text-xs text-muted-foreground" data-testid={`text-brand-${product.id}`}>
@@ -398,9 +416,13 @@ export default function ProductListTable({
                 {product.name}
               </div>
               {product.sku && (
-                <div className="text-xs text-muted-foreground">
+                <button
+                  className="text-xs text-muted-foreground hover:text-primary hover:underline text-left"
+                  onClick={() => openSkuImages(product.sku!)}
+                  title="Нажмите для поиска изображений"
+                >
                   Артикул: {product.sku}
-                </div>
+                </button>
               )}
             </>
           )}
@@ -674,6 +696,41 @@ export default function ProductListTable({
           </div>
         </>
       )}
+
+      {/* SKU image search popup */}
+      <Dialog open={!!skuPopup} onOpenChange={(open) => { if (!open) setSkuPopup(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-medium text-muted-foreground">
+              Изображения: <span className="text-foreground">{skuPopup?.sku}</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          {skuPopup?.loading ? (
+            <div className="flex justify-center items-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : skuPopup?.images.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
+              <ImageOff className="h-8 w-8" />
+              <span className="text-sm">Изображения не найдены</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              {skuPopup?.images.map((src, i) => (
+                <a key={i} href={src} target="_blank" rel="noopener noreferrer">
+                  <img
+                    src={src}
+                    alt={`${skuPopup?.sku} image ${i + 1}`}
+                    className="w-full h-40 object-contain rounded border bg-muted/30 hover:opacity-80 transition-opacity"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                  />
+                </a>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

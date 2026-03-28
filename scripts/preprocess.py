@@ -23,6 +23,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 from config import (
     RAW_CSV, SUPPLIERS_CSV, BRANDS_CSV, INTERMEDIATE_CSV, ERROR_LOG,
     STOCK_LOW_MAX,
+    GLOBAL_BLOCKED_BRANDS,
+    PHONIX_BLOCKED_BRANDS, PHONIX_BLOCKED_CATEGORIES,
+    HUBX_BLOCKED_CATEGORIES,
+    IMCOPEX_BLOCKED_BRANDS, IMCOPEX_BLOCKED_CATEGORIES,
+    REFURB_KEYWORDS,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -146,8 +151,13 @@ def parse_moq(raw: str) -> int:
 
 
 def parse_stock_quantity(raw: str) -> int | None:
+    raw = raw.strip()
+    # Handle range-prefixed values: "> 30" → 30, "< 10" → 10
+    m = re.match(r'^[><]\s*(\d+)', raw)
+    if m:
+        return max(0, int(m.group(1)))
     try:
-        return max(0, int(float(raw.strip())))
+        return max(0, int(float(raw)))
     except (ValueError, AttributeError):
         return None
 
@@ -194,6 +204,79 @@ def extract_brand(brand_raw: str, name: str, known_brands: list) -> str:
             return f"{first} {tokens[1]}"
         return first
     return ""
+
+
+# ── Offer-row SKU extraction ───────────────────────────────────────────────
+# Used for suppliers (e.g. GHz Service S.r.l.) that pack qty + SKU +
+# product name + price all into the Name field.
+_OFFER_QTY_RE   = re.compile(r'^\d+\s*[Pp][Cc][Ss]?\s+')
+_OFFER_PRICE_RE = re.compile(r'\s+\d+(?:[.,]\d+)?\s*(?:EUR|USD|GBP)\b.*$', re.IGNORECASE)
+_OFFER_PN_RE    = re.compile(r'P/N\s*:?\s*([A-Z0-9][A-Z0-9\-\.\/]{3,})', re.IGNORECASE)
+_PART_NUM_RE    = re.compile(r'^[A-Z0-9][A-Z0-9\-\.\/]{3,}$', re.IGNORECASE)
+# Matches pure-numeric models including Excel scientific notation: "12345", "1.96E+11"
+_NUMERIC_MODEL_RE = re.compile(r'^\d+(?:\.\d+)?(?:[Ee][+\-]?\d+)?$')
+
+# ── ELKO Group offer-name patterns ────────────────────────────────────────
+# Offer rows: Name is tab-separated "SKU\tProduct Name\tQty delivery_info"
+# or "Long Product Name (SKU)\tSKU\tQty delivery_info"
+# A token is treated as the SKU if it contains no spaces.
+_ELKO_OFFER_SKU_RE = re.compile(r'^[A-Z0-9][A-Z0-9\-\.\/\+\#]{3,}$', re.IGNORECASE)
+
+# ── Summit Sincerity Global LTD offer-name patterns ───────────────────────
+_SUMMIT_AMD_BOX_RE  = re.compile(
+    r'^AMD\s+Ryzen\s+(\S+)\s+(ENG|CN)\s+BOX$', re.IGNORECASE)
+_SUMMIT_AMD_TRAY_RE = re.compile(
+    r'^AMD\s+Ryzen\s+Tray\s+(\S+)$', re.IGNORECASE)
+_SUMMIT_MOQ_RE      = re.compile(r'\bMOQ\s+(\d+)\s*pcs\b', re.IGNORECASE)
+_SUMMIT_MOQ_STRIP   = re.compile(r'\s*Moq\s+\d+\s*pcs\b.*$', re.IGNORECASE)
+
+
+def extract_sku_from_offer_name(name: str) -> str:
+    """Extract manufacturer part number from an offer-style product name.
+
+    Tries three strategies in order:
+      1. Explicit P/N marker  — e.g. 'P/N : VCG507012TFXXPB1-O'
+      2. First token after qty has digits — e.g. 'WDS100T2XHE', 'J8H61A', '82YU009XIX'
+      3. Last alphanumeric token before price — fallback for 'KYOCERA ECOSYS MA5500IFX'
+    Returns empty string if none match.
+    """
+    # 1. Explicit P/N marker — most reliable
+    m = _OFFER_PN_RE.search(name)
+    if m:
+        return m.group(1).strip()
+
+    # Strip leading quantity and trailing price for token analysis
+    stripped = _OFFER_QTY_RE.sub('', name).strip()
+    stripped = _OFFER_PRICE_RE.sub('', stripped).strip()
+    if not stripped:
+        return ""
+
+    tokens = stripped.split()
+
+    # 2. First token looks like a part number (contains at least one digit)
+    if tokens:
+        first = tokens[0]
+        if re.search(r'\d', first) and _PART_NUM_RE.match(first):
+            return first
+
+    # 3. Last token that looks like a part number (brand-series-model format)
+    for token in reversed(tokens):
+        if re.search(r'\d', token) and _PART_NUM_RE.match(token):
+            return token
+
+    return ""
+
+
+def clean_offer_name(name: str) -> str:
+    """Strip leading quantity and trailing embedded price from offer-style names.
+
+    '150Pcs J8H61A HP LASERJET M501DN 249.00 EUR'  →  'J8H61A HP LASERJET M501DN'
+    '40PCS KYOCERA ECOSYS MA5500IFX 729.00 EUR'    →  'KYOCERA ECOSYS MA5500IFX'
+    Returns original string unchanged if stripping leaves nothing.
+    """
+    cleaned = _OFFER_QTY_RE.sub('', name).strip()
+    cleaned = _OFFER_PRICE_RE.sub('', cleaned).strip()
+    return cleaned if cleaned else name
 
 
 def is_separator_row(row: dict) -> bool:
@@ -266,6 +349,56 @@ def main():
             skipped += 1
             continue
 
+        # ── Global brand blocklist ────────────────────────────────────────────
+        if row.get("Brand", "").strip().upper() in GLOBAL_BLOCKED_BRANDS:
+            skipped += 1
+            continue
+
+        # ── Phonix: skip non-IT products (blocked brand, category, or refurb) ──
+        if row.get("Supplier", "").strip() == "Phonix":
+            if row.get("Category", "").strip().upper() in PHONIX_BLOCKED_CATEGORIES:
+                skipped += 1
+                continue
+            if row.get("Brand", "").strip().upper() in PHONIX_BLOCKED_BRANDS:
+                skipped += 1
+                continue
+            _phonix_text = (row.get("Name", "") + " " + row.get("Model", "")).upper()
+            if any(kw in _phonix_text for kw in REFURB_KEYWORDS):
+                skipped += 1
+                continue
+
+        # ── HubX: skip empty-category rows and refurb products ───────────────
+        elif row.get("Supplier", "").strip() == "HubX":
+            if row.get("Category", "").strip() in HUBX_BLOCKED_CATEGORIES:
+                skipped += 1
+                continue
+            _hubx_text = (row.get("Name", "") + " " + row.get("Model", "")).upper()
+            if any(kw in _hubx_text for kw in REFURB_KEYWORDS):
+                skipped += 1
+                continue
+
+        # ── BitSet: only keep rows where Notes contains a manufacturer SKU ──
+        elif row.get("Supplier", "").strip() == "BitSet":
+            if "SKU: " not in row.get("Notes", ""):
+                skipped += 1
+                continue
+
+        # ── Imcopex: skip non-IT categories and non-IT brands ────────────────
+        elif row.get("Supplier", "").strip() == "Imcopex":
+            if row.get("Category", "").strip() in IMCOPEX_BLOCKED_CATEGORIES:
+                skipped += 1
+                continue
+            if row.get("Brand", "").strip() in IMCOPEX_BLOCKED_BRANDS:
+                skipped += 1
+                continue
+
+        # ── ELKO Group: skip refurb/preowned products (GRADE A/A+, REFURB.) ──
+        elif row.get("Supplier", "").strip() == "ELKO Group":
+            _elko_text = (row.get("Name", "") + " " + row.get("Model", "")).upper()
+            if any(kw in _elko_text for kw in REFURB_KEYWORDS):
+                skipped += 1
+                continue
+
         # ── Supplier lookup ──
         supplier_name = row.get("Supplier", "").strip()
         cfg = supplier_config.get(supplier_name)
@@ -287,11 +420,128 @@ def main():
         stock    = map_stock_status(quantity, cfg["type"])
         brand    = extract_brand(row.get("Brand", ""), row.get("Name", ""), known_brands)
 
+        model    = row.get("Model", "").strip()
+        name_raw = row.get("Name",  "").strip()
+
+        # ── Supplier-specific offer-name parsing ──────────────────────────────
+        # GHz Service S.r.l. packs qty + SKU + product name + EUR price into
+        # the Name field with no Model column.  Extract the SKU so it becomes
+        # the cache key, and clean the name so Gemini gets tidy input.
+        # Add elif blocks here for other offer-format suppliers as needed.
+        if supplier_name == "GHz Service S.r.l.":
+            if not model:
+                model = extract_sku_from_offer_name(name_raw)
+            name_raw = clean_offer_name(name_raw)
+
+        elif supplier_name == "Summit Sincerity Global LTD":
+            # Extract MOQ if embedded in name ("Moq 200pcs" / "MOQ 10pcs")
+            moq_m = _SUMMIT_MOQ_RE.search(name_raw)
+            if moq_m and not moq:
+                moq = moq_m.group(1)
+
+            if not model:
+                # ── Crucial SSD: "CT4000P310SSD8 P310 PCIe Gen4 NVMe 2280 M.2 Moq 200pcs"
+                ct_m = re.match(r'^(CT[A-Z0-9]+)', name_raw, re.IGNORECASE)
+                if ct_m:
+                    model    = ct_m.group(1)
+                    name_raw = _SUMMIT_MOQ_STRIP.sub('', name_raw).strip()
+
+                # ── AMD CPU boxed: "AMD Ryzen 9850x3d ENG BOX" / "AMD Ryzen 9850x3d CN BOX"
+                #    ENG BOX and CN BOX have different retail SKUs → separate cache entries
+                elif _SUMMIT_AMD_BOX_RE.match(name_raw):
+                    m2       = _SUMMIT_AMD_BOX_RE.match(name_raw)
+                    cpu_id   = m2.group(1).upper()
+                    box_type = m2.group(2).upper()
+                    model    = f"{cpu_id} {box_type} BOX"
+                    name_raw = f"AMD Ryzen {cpu_id} {box_type} BOX"
+
+                # ── AMD CPU tray: "AMD Ryzen Tray 9950X3D"
+                #    Tray SKU differs from boxed → separate cache entry with TRAY suffix
+                elif _SUMMIT_AMD_TRAY_RE.match(name_raw):
+                    cpu_id   = _SUMMIT_AMD_TRAY_RE.match(name_raw).group(1).upper()
+                    model    = f"{cpu_id} TRAY"
+                    name_raw = f"AMD Ryzen {cpu_id} Tray"
+
+                # ── AMD GPU offer: "AMD GPU Radeon Offer : (...MOQ 10pcs) Powercolor RX9070XT 16G-A -"
+                elif name_raw.upper().startswith("AMD GPU RADEON OFFER"):
+                    gpu_m = re.search(r'\)\s*(.+?)\s*-\s*$', name_raw)
+                    if gpu_m:
+                        gpu_part = gpu_m.group(1).strip()
+                        name_raw = gpu_part
+                        parts    = gpu_part.split(None, 1)
+                        model    = parts[1].strip() if len(parts) > 1 else gpu_part
+
+                # ── Intel CPU boxed/tray: "14900KF", "14700F tray", "Ultra 245 Tray"
+                else:
+                    model    = re.sub(r'\s+tray$', '', name_raw, flags=re.IGNORECASE).strip()
+                    name_raw = model
+
+        elif supplier_name == "Siewert & Kau":
+            # Offer rows pack all data into Name as tab-separated fields:
+            #   "CT1000P310SSD8\tSSD Crucial P310 M.2 1TB PCIe Gen4x4 2280\t100"
+            # Price List rows already have Model/Name/Category populated — leave untouched.
+            if row.get("Source", "").strip() == "Offer" and not model:
+                parts = name_raw.split("\t")
+                if len(parts) >= 2:
+                    model    = parts[0].strip()
+                    name_raw = parts[1].strip()
+                    if len(parts) >= 3 and not moq:
+                        moq = parts[2].strip()
+
+        elif supplier_name == "BitSet":
+            # Replace internal BitSet article number with the real manufacturer SKU
+            # from Notes: "SKU: G27C4 E3 | Features: ..."
+            m = re.search(r'SKU:\s*([^|]+)', row.get("Notes", ""))
+            if m:
+                model = m.group(1).strip()
+
+        elif supplier_name == "ELKO Group":
+            # Offer rows: Name is tab-separated "p1\tp2\tqty_delivery"
+            # Pattern A: "1102Z43NL0\tKyocera ECOSYS MA4000CIX\t36 1-3 weeks"
+            #   → p1 is SKU (no spaces, matches part-num pattern)
+            # Pattern B: "HP LaserJet Pro M501dn (J8H61A#B19)\tJ8H61A#B19\t100 3-4 weeks"
+            #   → p1 is product name, p2 is SKU
+            # Price List rows already have Model populated — leave untouched.
+            if row.get("Source", "").strip() == "Offer":
+                parts = name_raw.split("\t")
+                if len(parts) >= 2:
+                    p1           = parts[0].strip()
+                    p2           = parts[1].strip()
+                    qty_delivery = parts[2].strip() if len(parts) >= 3 else ""
+
+                    if _ELKO_OFFER_SKU_RE.match(p1):
+                        # Pattern A: SKU first
+                        model    = p1
+                        name_raw = p2
+                    else:
+                        # Pattern B: name first, SKU second; strip "(SKU)" from name
+                        model    = p2
+                        name_raw = re.sub(
+                            r'\s*\([A-Z0-9#][^)]*\)\s*$', '', p1,
+                            flags=re.IGNORECASE,
+                        ).strip() or p1
+
+                    # Extract stock qty from "N delivery_info" (e.g. "36 1-3 weeks")
+                    if qty_delivery:
+                        qty_m = re.match(r'^(\d+)', qty_delivery)
+                        if qty_m:
+                            quantity = int(qty_m.group(1))
+                            stock    = map_stock_status(quantity, cfg["type"])
+
+        # ── Numeric-only model: prefix with brand to avoid cache collisions ──────
+        # Also handles Excel scientific notation exports: "1.96E+11" → "microsoft-196000000000"
+        if model and _NUMERIC_MODEL_RE.match(model.strip()) and brand:
+            try:
+                numeric_str = str(int(float(model.strip())))
+            except (ValueError, OverflowError):
+                numeric_str = model.strip()
+            model = f"{brand.upper()}-{numeric_str}"
+
         ok_rows.append({
             "supplier":             supplier_name,
             "brand_raw":            brand,
-            "model":                row.get("Model", "").strip(),
-            "name_raw":             row.get("Name", "").strip(),
+            "model":                model,
+            "name_raw":             name_raw,
             "category_raw":         row.get("Category", "").strip(),
             "price_raw":            row.get("Price", "0").strip(),
             "currency":             row.get("Currency", cfg["currency"]).strip().upper(),

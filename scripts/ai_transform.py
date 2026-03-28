@@ -18,10 +18,12 @@ Run from repo root:
 import csv
 import json
 import math
+import pathlib
 import re
 import sys
 import time
 import argparse
+import xml.etree.ElementTree as ET
 import requests
 import os
 
@@ -33,7 +35,7 @@ from config import (
     INTL_REGIONS, INTL_PRODUCT_SPECS,
     CATEGORY_TO_PRODUCT_TYPE,
     LOCAL_USD_MARGIN, LOCAL_AMD_MARGIN,
-    INTERMEDIATE_CSV, OUTPUT_CSV, PRICE_DEBUG_CSV, CATEGORIES,
+    INTERMEDIATE_CSV, OUTPUT_CSV, PRICE_DEBUG_CSV, PRODUCT_CACHE_CSV, CATEGORIES,
     SUPPLIERS_CSV, DELIVERY_TIMES_CSV,
 )
 
@@ -45,13 +47,34 @@ from google.genai import types as genai_types
 # ─────────────────────────────────────────────────────────────────────────────
 
 def fetch_cb_rate() -> float:
-    """Fetch live USD→AMD rate from Central Bank of Armenia."""
-    resp = requests.get(CB_RATE_URL, timeout=10)
+    """Fetch live USD→AMD rate from Central Bank of Armenia SOAP API."""
+    soap_body = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">'
+        '<soap:Body><ExchangeRatesLatest xmlns="http://www.cba.am/"/></soap:Body>'
+        '</soap:Envelope>'
+    )
+    resp = requests.post(
+        CB_RATE_URL,
+        data=soap_body.encode("utf-8"),
+        headers={
+            "Content-Type": "text/xml; charset=utf-8",
+            "SOAPAction":   '"http://www.cba.am/ExchangeRatesLatest"',
+        },
+        timeout=10,
+    )
     resp.raise_for_status()
-    data = resp.json()
-    rate = float(data["USD"])
-    print(f"Central Bank rate: 1 USD = {rate} AMD")
-    return rate
+    root = ET.fromstring(resp.content)
+    ns = {"cba": "http://www.cba.am/"}
+    for node in root.iter():
+        if node.tag.endswith("ExchangeRate"):
+            iso = node.find("cba:ISO", ns)
+            val = node.find("cba:Rate", ns)
+            if iso is not None and iso.text == "USD" and val is not None:
+                rate = float(val.text)
+                print(f"Central Bank rate: 1 USD = {rate} AMD")
+                return rate
+    raise ValueError("USD rate not found in CBA API response")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -135,10 +158,16 @@ def detect_product_type(category: str, name: str) -> str:
             return "PC Case"
         if any(k in n for k in ("cooler", "кулер", "cooling")):
             return "Coolers for CPU"
+        if any(k in n for k in ("optical", "dvd", "blu-ray", "bluray", "cd-rom", "dvd-rom", "odd")):
+            return "Optical Drives"
         return "RAM"  # unknown component → conservative fallback
 
     if category == "Принтеры/Сканеры":
-        return "Scanners" if any(k in n for k in ("scanner", "сканер")) else "Printers"
+        if any(k in n for k in ("scanner", "сканер")):
+            return "Scanners"
+        if any(k in n for k in ("toner", "cartridge", "ink ", "тонер", "картридж")):
+            return "Printer Supplies"
+        return "Printers"
 
     if category == "Проекторы и принадлежности":
         if any(k in n for k in ("screen", "экран")):
@@ -160,15 +189,23 @@ def detect_product_type(category: str, name: str) -> str:
             return "Webcams"
         if any(k in n for k in ("gamepad", "controller", "геймпад")):
             return "Gamepads"
-        return "Keyboards"  # default accessory
+        if any(k in n for k in ("bag", "backpack", "сумка", "рюкзак")):
+            return "Bags & Backpacks"
+        if any(k in n for k in ("watch", "smartwatch", "часы")):
+            return "Watches"
+        return "Accessories"
 
     if category == "Сетевое оборудование":
+        if any(k in n for k in ("cabinet", "шкаф", "стойка rack", "network cabinet")):
+            return "Network Cabinets"
         return "Switches" if any(k in n for k in ("switch", "коммутатор")) else "Routers"
 
     if category == "Кабели/Переходники":
         return "Adapters" if any(k in n for k in ("adapter", "переходник", "адаптер")) else "Cables"
 
     if category == "ТВ/Аудио/Фото/Видео техника":
+        if any(k in n for k in ("microphone", "микрофон", "audio interface")):
+            return "Microphones & Audio Interfaces"
         if any(k in n for k in ("photo", "camera", "фото", "фотоаппарат")):
             return "Photo Cameras"
         if any(k in n for k in ("video camera", "видеокамера")):
@@ -177,11 +214,16 @@ def detect_product_type(category: str, name: str) -> str:
             return "Drones"
         return "TVs"
 
+    if category == "Системы безопасности":
+        if any(k in n for k in ("alarm", "сигнализация")):
+            return "Alarm Systems"
+        return "Surveillance Cameras"
+
     if category == "Торговое оборудование":
         if any(k in n for k in ("barcode", "штрих-код")):
             return "Barcode Scanners"
         if any(k in n for k in ("label", "этикетка")):
-            return "Label/Barcode Printers"
+            return "Label Tapes" if "tape" in n else "Label/Barcode Printers"
         if any(k in n for k in ("cash drawer", "денежный ящик")):
             return "Cash Drawers"
         return "POS Systems"
@@ -246,6 +288,46 @@ def calculate_price_amd(price_raw: str, currency: str, supplier_type: str,
 
     # Round UP to nearest 50 AMD
     return max(0, math.ceil(final / 50) * 50)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Product name cache
+# ─────────────────────────────────────────────────────────────────────────────
+
+def load_product_cache(path: str) -> dict:
+    """Load product_cache.csv → dict keyed by model_raw.strip().lower().
+
+    Returns an empty dict if the file doesn't exist yet.
+    Only the AI-normalised text fields are cached (name, sku, category, brand).
+    Volatile fields (price, eta, moq) are always re-calculated from live data.
+    """
+    cache = {}
+    p = pathlib.Path(path)
+    if not p.exists():
+        return cache
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        for row in csv.DictReader(f):
+            key = row.get("model_raw", "").strip().lower()
+            if key:
+                cache[key] = {
+                    "name":     row.get("name", ""),
+                    "sku":      row.get("sku", ""),
+                    "category": row.get("category", ""),
+                    "brand":    row.get("brand", ""),
+                    "status":   row.get("status", ""),
+                }
+    return cache
+
+
+def save_product_cache(path: str, cache: dict) -> None:
+    """Write the full product cache back to disk (sorted by key for stable diffs)."""
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(
+            f, fieldnames=["model_raw", "name", "sku", "category", "brand", "status"]
+        )
+        writer.writeheader()
+        for model_raw, ai in sorted(cache.items()):
+            writer.writerow({"model_raw": model_raw, **ai})
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -325,9 +407,11 @@ Examples by product type:
 SKU FORMAT
 ══════════════════════════════════════════════════
 • Manufacturer part number only (no human-readable description)
-• Remove region suffixes: /EU /AP /RU /WW /EE etc.
+• Keep the part number exactly as-is — do NOT remove any suffixes, hyphens, or slashes
+  (e.g. MZ-77E250B/EU stays MZ-77E250B/EU, KVR32N22S8/8 stays KVR32N22S8/8)
+• Do NOT strip region suffixes (/EU, /AP, /RU, /WW, /EE, etc.) or any other suffix
 • Remove colour suffixes only if colour is NOT the product differentiator
-• Keep the core alphanumeric identifier
+• If the input model field already looks like a valid part number, prefer it over guessing
 
 ══════════════════════════════════════════════════
 BRAND FORMAT
@@ -469,7 +553,22 @@ OUTPUT_HEADERS = [
 
 # Matches capacity-like strings that suppliers sometimes put in the Brand column
 # e.g. "16GB", "32GB", "512MB", "1TB" — clearly not a brand name.
-_CAPACITY_RE = re.compile(r'^\d+\s*(GB|MB|TB|KB)$', re.IGNORECASE)
+_CAPACITY_RE   = re.compile(r'^\d+\s*(GB|MB|TB|KB)$', re.IGNORECASE)
+# Matches numeric-only SKUs (plain int or Excel scientific notation: "1.96E+11")
+_NUMERIC_SKU_RE = re.compile(r'^\d+(?:\.\d+)?(?:[Ee][+\-]?\d+)?$')
+
+
+def _normalize_sku(raw_sku: str, brand_raw: str) -> str:
+    """If Gemini returned a bare numeric SKU, prefix with brand (BRAND-12345).
+    Real manufacturer SKUs (e.g. 'VMC2320W') are returned unchanged."""
+    s = raw_sku.strip()
+    if s and _NUMERIC_SKU_RE.match(s) and brand_raw:
+        try:
+            s = str(int(float(s)))
+        except (ValueError, OverflowError):
+            pass
+        return f"{brand_raw.upper()}-{s}"
+    return s
 
 # Maps the leading word(s) of an AI-normalized product name → INTL_PRODUCT_SPECS key.
 # Two-word prefixes are checked before single-word ones.
@@ -477,67 +576,97 @@ _CAPACITY_RE = re.compile(r'^\d+\s*(GB|MB|TB|KB)$', re.IGNORECASE)
 # the existing category-based keyword scan handles it correctly.
 _AI_PREFIX_MAP = {
     # ── two-word prefixes ──────────────────────────────────────────────────────
-    "access point":      "Routers",
-    "mini pc":           "Mini PCs",
-    "all-in-one":        "All-In-Ones",
-    "projection screen": "Projector Screens",
-    "external ssd":      "External HDD/SSD",
-    "external hdd":      "External HDD/SSD",
-    "flash drive":       "Flash Drives/Memory Cards",
-    "usb flash":         "Flash Drives/Memory Cards",   # Gemini: "USB Flash Samsung Bar Plus | ..."
-    "network cable":     "Network Cables",
-    "patch cord":        "Network Cables",
-    "printer label":     "Label/Barcode Printers",
-    "scanner barcode":   "Barcode Scanners",
+    "access point":        "Routers",
+    "mini pc":             "Mini PCs",
+    "all-in-one":          "All-In-Ones",
+    "projection screen":   "Projector Screens",
+    "external ssd":        "External HDD/SSD",
+    "external hdd":        "External HDD/SSD",
+    "flash drive":         "Flash Drives/Memory Cards",
+    "usb flash":           "Flash Drives/Memory Cards",   # Gemini: "USB Flash Samsung Bar Plus | ..."
+    "network cable":       "Network Cables",
+    "patch cord":          "Network Cables",
+    "printer label":       "Label/Barcode Printers",
+    "scanner barcode":     "Barcode Scanners",
+    "label tape":          "Label Tapes",
+    "laptop bag":          "Bags & Backpacks",
+    "laptop backpack":     "Bags & Backpacks",
+    "ev charger":          "EV Chargers",
+    "gaming console":      "Gaming Consoles",
+    "audio interface":     "Microphones & Audio Interfaces",
+    "network cabinet":     "Network Cabinets",
+    "server cabinet":      "Network Cabinets",
+    "rack cabinet":        "Network Cabinets",
+    "optical drive":       "Optical Drives",
+    "dvd drive":           "Optical Drives",
+    "blu-ray drive":       "Optical Drives",
+    "presentation remote": "Presentation Remotes",
+    "printer supply":      "Printer Supplies",
+    "ink cartridge":       "Printer Supplies",
+    "toner cartridge":     "Printer Supplies",
+    "robot vacuum":        "Vacuum Cleaners",
+    "vacuum cleaner":      "Vacuum Cleaners",
     # ── single-word prefixes ───────────────────────────────────────────────────
-    "ssd":          "SSD",
-    "hdd":          "HDD",
-    "ram":          "RAM",
-    "cpu":          "CPU",
-    "gpu":          "Video Cards",
-    "motherboard":  "Mainboards",
-    "psu":          "PC PSU",
-    "cooler":       "Coolers for CPU",
-    "laptop":       "Laptops",
-    "pc":           "Desktops",
-    "workstation":  "Desktops",
-    "server":       "Servers",
-    "monitor":      "Monitors",
-    "tv":           "TVs",
-    "printer":      "Printers",
-    "mfp":          "Printers",
-    "plotter":      "Printers",
-    "scanner":      "Scanners",
-    "projector":    "Projectors",
-    "projection":   "Projector Screens",
-    "screen":       "Projector Screens",
-    "ups":          "UPS",
-    "pdu":          "UPS",
-    "switch":       "Switches",
-    "router":       "Routers",
-    "firewall":     "Routers",
-    "phone":        "Smartphones",
-    "smartphone":   "Smartphones",
-    "tablet":       "Tablets",
-    "keyboard":     "Keyboards",
-    "mouse":        "Mice",
-    "speaker":      "Speakers",
-    "headset":      "Headsets",
-    "webcam":       "Webcams",
-    "gamepad":      "Gamepads",
-    "drone":        "Drones",
-    "microsd":      "Flash Drives/Memory Cards",   # Gemini: "microSD Samsung EVO Plus | ..."
-    "cable":        "Cables",
-    "adapter":      "Adapters",
-    "watch":        "Smart Gadgets",
-    "nvr":          "Surveillance Cameras",
-    "dvr":          "Surveillance Cameras",
-    "barcode":      "Barcode Scanners",
-    "label":        "Label/Barcode Printers",
-    "cash":         "Cash Drawers",
-    "pos":          "POS Systems",
-    "sfp":          "Network Cards",
-    "sfp+":         "Network Cards",
+    "ssd":           "SSD",
+    "hdd":           "HDD",
+    "ram":           "RAM",
+    "cpu":           "CPU",
+    "gpu":           "Video Cards",
+    "motherboard":   "Mainboards",
+    "psu":           "PC PSU",
+    "cooler":        "Coolers for CPU",
+    "laptop":        "Laptops",
+    "pc":            "Desktops",
+    "workstation":   "Desktops",
+    "server":        "Servers",
+    "monitor":       "Monitors",
+    "tv":            "TVs",
+    "printer":       "Printers",
+    "mfp":           "Printers",
+    "plotter":       "Printers",
+    "scanner":       "Scanners",
+    "projector":     "Projectors",
+    "projection":    "Projector Screens",
+    "screen":        "Projector Screens",
+    "ups":           "UPS",
+    "pdu":           "UPS",
+    "switch":        "Switches",
+    "router":        "Routers",
+    "firewall":      "Routers",
+    "phone":         "Smartphones",
+    "smartphone":    "Smartphones",
+    "tablet":        "Tablets",
+    "keyboard":      "Keyboards",
+    "mouse":         "Mice",
+    "speaker":       "Speakers",
+    "headset":       "Headsets",
+    "webcam":        "Webcams",
+    "gamepad":       "Gamepads",
+    "drone":         "Drones",
+    "microsd":       "Flash Drives/Memory Cards",   # Gemini: "microSD Samsung EVO Plus | ..."
+    "cable":         "Cables",
+    "adapter":       "Adapters",
+    "watch":         "Watches",
+    "smartwatch":    "Watches",
+    "nvr":           "Surveillance Cameras",
+    "dvr":           "Surveillance Cameras",
+    "barcode":       "Barcode Scanners",
+    "label":         "Label/Barcode Printers",
+    "cash":          "Cash Drawers",
+    "pos":           "POS Systems",
+    "sfp":           "Network Cards",
+    "sfp+":          "Network Cards",
+    "microphone":    "Microphones & Audio Interfaces",
+    "console":       "Gaming Consoles",
+    "backpack":      "Bags & Backpacks",
+    "bag":           "Bags & Backpacks",
+    "alarm":         "Alarm Systems",
+    "toner":         "Printer Supplies",
+    "presenter":     "Presentation Remotes",
+    "software":      "Digital Software",
+    "vacuum":        "Vacuum Cleaners",
+    "accessories":   "Accessories",
+    "accessory":     "Accessories",
 }
 
 
@@ -615,7 +744,7 @@ def build_output_row(inter: dict, ai: dict, price_amd: int,
     return {
         "id":                   "",
         "name":                 (ai.get("name") or inter["name_raw"]).strip(),
-        "sku":                  (ai.get("sku")  or inter["model"]).strip(),
+        "sku":                  _normalize_sku(ai.get("sku") or inter["model"], inter.get("brand_raw", "")),
         "price":                price_amd,
         "stock":                stock,
         "eta":                  eta,
@@ -749,6 +878,13 @@ def main():
     supplier_types, supplier_regions = load_suppliers(SUPPLIERS_CSV)
     delivery_times = load_delivery_times(DELIVERY_TIMES_CSV)
 
+    # Load product name cache (persists across runs — skips Gemini for known products)
+    product_cache = load_product_cache(PRODUCT_CACHE_CSV)
+    cache_hits    = 0
+    cache_misses  = 0
+    cache_updated = False
+    print(f"Product cache: {len(product_cache)} entries loaded")
+
     # Process in batches
     output_rows = []
     debug_rows  = []
@@ -757,21 +893,47 @@ def main():
     for batch_idx in range(n_batches):
         batch_rows = rows[batch_idx * AI_BATCH_SIZE : (batch_idx + 1) * AI_BATCH_SIZE]
 
-        # Build AI payload (only what Gemini needs)
-        ai_payload = [
-            {
-                "brand":        r["brand_raw"],
-                "model":        r["model"],
-                "name_raw":     r["name_raw"],
-                "category_raw": r["category_raw"],
-            }
-            for r in batch_rows
-        ]
+        # ── Split batch into cache hits and misses ────────────────────────────
+        ai_results       = [None] * len(batch_rows)
+        uncached_indices = []
+        uncached_payload = []
 
-        print(f"  Batch {batch_idx + 1}/{n_batches} ({len(batch_rows)} products)...", end=" ", flush=True)
-        ai_results = call_gemini(ai_payload)
-        print("✓")
+        for i, r in enumerate(batch_rows):
+            key = r["model"].strip().lower()
+            if key and key in product_cache:
+                ai_results[i] = product_cache[key]
+                cache_hits += 1
+            else:
+                uncached_indices.append(i)
+                uncached_payload.append({
+                    "brand":        r["brand_raw"],
+                    "model":        r["model"],
+                    "name_raw":     r["name_raw"],
+                    "category_raw": r["category_raw"],
+                })
 
+        # ── Call Gemini only for uncached rows ────────────────────────────────
+        if uncached_payload:
+            n_cached = len(batch_rows) - len(uncached_payload)
+            suffix   = f" ({n_cached} from cache)" if n_cached else ""
+            print(f"  Batch {batch_idx + 1}/{n_batches} — {len(uncached_payload)} new{suffix}...",
+                  end=" ", flush=True)
+            gemini_results = call_gemini(uncached_payload)
+            print("✓")
+            for idx, result in zip(uncached_indices, gemini_results):
+                cache_misses += 1
+                key = batch_rows[idx]["model"].strip().lower()
+                brand_raw = batch_rows[idx].get("brand_raw", "")
+                # Normalize SKU before caching so the cache reflects the final value
+                normalized = {**result, "sku": _normalize_sku(result.get("sku", ""), brand_raw)}
+                ai_results[idx] = normalized
+                if key:
+                    product_cache[key] = {**normalized, "status": "NEW"}
+                    cache_updated = True
+        else:
+            print(f"  Batch {batch_idx + 1}/{n_batches} — all {len(batch_rows)} from cache ✓")
+
+        # ── Process all rows (cached + freshly Gemini'd) ─────────────────────
         for inter, ai in zip(batch_rows, ai_results):
             supplier_type = supplier_types.get(inter["supplier"], "international")
             region        = supplier_regions.get(inter["supplier"], "Europe")
@@ -797,9 +959,15 @@ def main():
             output_rows.append(build_output_row(inter, ai, price_amd, supplier_type, eta))
             debug_rows.append(build_price_debug_row(inter, ai, price_amd, supplier_type, eta, cb_rate, region=region))
 
-        # Small delay to avoid rate-limiting
-        if batch_idx < n_batches - 1:
+        # Small delay only when Gemini was actually called (to avoid rate-limiting)
+        if uncached_payload and batch_idx < n_batches - 1:
             time.sleep(0.5)
+
+    # Save updated product cache
+    if cache_updated:
+        save_product_cache(PRODUCT_CACHE_CSV, product_cache)
+        print(f"Product cache updated → {len(product_cache)} entries saved")
+    print(f"Cache: {cache_hits} hits, {cache_misses} misses")
 
     # Write output
     out_path = OUTPUT_CSV if not args.test else OUTPUT_CSV.replace(".csv", "_test.csv")
