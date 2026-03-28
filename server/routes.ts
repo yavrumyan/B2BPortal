@@ -1244,6 +1244,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/image-search", isAuthenticated, async (req, res) => {
+    const sku = ((req.query.sku as string) || "").trim();
+    if (!sku) return res.status(400).json({ message: "SKU required" });
+
+    try {
+      // Step 1: get the vqd token DuckDuckGo requires for image queries
+      const ddgHtml = await fetch(
+        `https://duckduckgo.com/?q=${encodeURIComponent(sku + " product")}&ia=images`,
+        { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" } }
+      ).then((r) => r.text());
+
+      const vqdMatch = ddgHtml.match(/vqd=['"]?([\d-]+)['"]?/);
+      if (!vqdMatch) return res.json({ images: [] });
+
+      // Step 2: fetch image results JSON
+      const imgData = await fetch(
+        `https://duckduckgo.com/i.js?q=${encodeURIComponent(sku + " product")}&o=json&vqd=${vqdMatch[1]}&f=,,,,,&p=1`,
+        {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": "https://duckduckgo.com/",
+          },
+        }
+      ).then((r) => r.json()) as { results?: Array<{ image: string; thumbnail: string }> };
+
+      const images = (imgData.results || []).slice(0, 4).map((r) => r.thumbnail || r.image);
+      res.json({ images });
+    } catch (e) {
+      console.error("[image-search]", e);
+      res.json({ images: [] });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
