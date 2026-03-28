@@ -42,10 +42,11 @@ export default function ProductListTable({
   const [pageSize, setPageSize] = useState(50);
   const [skuPopup, setSkuPopup] = useState<{ sku: string; images: string[]; loading: boolean } | null>(null);
 
-  const openSkuImages = async (sku: string) => {
+  const openSkuImages = async (sku: string, brand?: string | null) => {
     setSkuPopup({ sku, images: [], loading: true });
+    const query = [brand, sku].filter(Boolean).join(" ");
     try {
-      const res = await fetch(`/api/image-search?sku=${encodeURIComponent(sku)}`);
+      const res = await fetch(`/api/image-search?sku=${encodeURIComponent(query)}`);
       const data = await res.json();
       setSkuPopup({ sku, images: data.images || [], loading: false });
     } catch {
@@ -229,7 +230,7 @@ export default function ProductListTable({
             {product.sku && (
               <button
                 className="text-xs text-muted-foreground hover:text-primary hover:underline text-left"
-                onClick={() => openSkuImages(product.sku!)}
+                onClick={() => openSkuImages(product.sku!, product.brand)}
                 title="Нажмите для поиска изображений"
                 data-testid={`text-sku-${product.id}`}
               >
@@ -418,7 +419,7 @@ export default function ProductListTable({
               {product.sku && (
                 <button
                   className="text-xs text-muted-foreground hover:text-primary hover:underline text-left"
-                  onClick={() => openSkuImages(product.sku!)}
+                  onClick={() => openSkuImages(product.sku!, product.brand)}
                   title="Нажмите для поиска изображений"
                 >
                   Артикул: {product.sku}
