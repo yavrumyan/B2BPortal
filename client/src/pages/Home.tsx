@@ -445,6 +445,29 @@ export default function Home() {
     }
   }, []);
 
+  const handleSectionChange = (section: "products" | "orders" | "inquiries" | "profile") => {
+    setActiveSection(section);
+    setLocation(`/?section=${section}`);
+    // Invalidate queries when switching sections to ensure fresh data
+    if (section === "products") {
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+    } else if (section === "orders") {
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+    } else if (section === "inquiries") {
+      queryClient.invalidateQueries({ queryKey: ["/api/inquiries"] });
+    } else if (section === "profile" && customer?.id) {
+      // Force refetch stats when viewing profile
+      queryClient.invalidateQueries({ queryKey: ["/api/customers", customer.id, "stats"] });
+      queryClient.refetchQueries({ queryKey: ["/api/customers", customer.id, "stats"] });
+    }
+  };
+
+  const { data: products = [], isLoading } = useQuery<Product[]>({
+    queryKey: ["/api/products"],
+  });
+
+  // Apply shared cart link (?cart=ID) — must be after `products` declaration
   useEffect(() => {
     const pendingId = sessionStorage.getItem("pendingSharedCart");
     if (!pendingId || !isAuthenticated || isAdmin || products.length === 0) return;
@@ -482,28 +505,6 @@ export default function Home() {
       })
       .catch(() => toast({ title: "Ошибка загрузки корзины", variant: "destructive" }));
   }, [isAuthenticated, isAdmin, products]);
-
-  const handleSectionChange = (section: "products" | "orders" | "inquiries" | "profile") => {
-    setActiveSection(section);
-    setLocation(`/?section=${section}`);
-    // Invalidate queries when switching sections to ensure fresh data
-    if (section === "products") {
-      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-    } else if (section === "orders") {
-      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-    } else if (section === "inquiries") {
-      queryClient.invalidateQueries({ queryKey: ["/api/inquiries"] });
-    } else if (section === "profile" && customer?.id) {
-      // Force refetch stats when viewing profile
-      queryClient.invalidateQueries({ queryKey: ["/api/customers", customer.id, "stats"] });
-      queryClient.refetchQueries({ queryKey: ["/api/customers", customer.id, "stats"] });
-    }
-  };
-
-  const { data: products = [], isLoading } = useQuery<Product[]>({
-    queryKey: ["/api/products"],
-  });
 
   const filteredProductIds = useMemo(() => {
     return products.filter((product) => {
