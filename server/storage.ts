@@ -69,6 +69,7 @@ export interface IStorage {
   updateOrderItems(id: string, items: any[]): Promise<Order>;
   markOrderAsSeen(id: string): Promise<Order>;
   markOrderAsAdminSeen(id: string): Promise<Order>;
+  markOrderAsAdminUnseen(id: string): Promise<void>;
   deleteOrder(id: string): Promise<void>; // Added deleteOrder method
 
   // Order comment operations
@@ -439,6 +440,10 @@ export class DatabaseStorage implements IStorage {
     }
 
     return updated;
+  }
+
+  async markOrderAsAdminUnseen(id: string): Promise<void> {
+    await db.update(orders).set({ adminSeen: false }).where(eq(orders.id, id));
   }
 
   async deleteOrder(id: string): Promise<void> {

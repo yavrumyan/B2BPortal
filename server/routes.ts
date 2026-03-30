@@ -1188,10 +1188,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isInternal: internal,
       });
 
-      // Send email notifications (fire-and-forget)
+      // Send email notifications and update seen flags (fire-and-forget)
       const { sendAdminNewCommentEmail, sendCustomerNewCommentEmail } = await import("./email.js");
       if (customer.role !== 'admin') {
-        // Customer posted → notify admin
+        // Customer posted → re-flag order as unseen for admin + notify admin
+        storage.markOrderAsAdminUnseen(req.params.id).catch(() => {});
         sendAdminNewCommentEmail(customer, order, message.trim()).catch(err =>
           console.error("[EMAIL] Failed to send admin comment notification:", err)
         );
