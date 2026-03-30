@@ -7,6 +7,7 @@ import {
   inquiries,
   offers,
   passwordResetTokens,
+  banners,
   type Customer,
   type Product,
   type InsertProduct,
@@ -21,6 +22,8 @@ import {
   type Offer,
   type InsertOffer,
   type PasswordResetToken,
+  type Banner,
+  type InsertBanner,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, gt } from "drizzle-orm";
@@ -98,6 +101,13 @@ export interface IStorage {
   getValidResetToken(token: string): Promise<PasswordResetToken | undefined>;
   markResetTokenUsed(tokenId: string): Promise<void>;
   updateCustomerPassword(customerId: string, hashedPassword: string): Promise<void>;
+
+  // Banner operations
+  getBanners(): Promise<Banner[]>;
+  getActiveBanners(): Promise<Banner[]>;
+  createBanner(banner: InsertBanner): Promise<Banner>;
+  updateBanner(id: string, updates: Partial<InsertBanner>): Promise<Banner>;
+  deleteBanner(id: string): Promise<Banner>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -659,6 +669,32 @@ export class DatabaseStorage implements IStorage {
       .update(customers)
       .set({ password: hashedPassword, updatedAt: new Date() })
       .where(eq(customers.id, customerId));
+  }
+
+  // Banner operations
+  async getBanners(): Promise<Banner[]> {
+    return db.select().from(banners).orderBy(banners.sortOrder, banners.createdAt);
+  }
+
+  async getActiveBanners(): Promise<Banner[]> {
+    return db.select().from(banners)
+      .where(eq(banners.active, true))
+      .orderBy(banners.sortOrder, banners.createdAt);
+  }
+
+  async createBanner(banner: InsertBanner): Promise<Banner> {
+    const [created] = await db.insert(banners).values(banner).returning();
+    return created;
+  }
+
+  async updateBanner(id: string, updates: Partial<InsertBanner>): Promise<Banner> {
+    const [updated] = await db.update(banners).set(updates).where(eq(banners.id, id)).returning();
+    return updated;
+  }
+
+  async deleteBanner(id: string): Promise<Banner> {
+    const [deleted] = await db.delete(banners).where(eq(banners.id, id)).returning();
+    return deleted;
   }
 }
 

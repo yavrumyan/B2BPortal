@@ -3,6 +3,10 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupSession, isAuthenticated, isAdmin } from "./auth";
 import bcrypt from "bcryptjs";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import express from "express";
 import {
   insertBusinessRegistrationSchema,
   insertProductSchema,
@@ -30,6 +34,29 @@ import {
 import { generateInvoicePDF, generatePriceListPDF } from "./pdf.js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // ── Banner file upload setup ───────────────────────────────────────────────
+  const UPLOADS_DIR = path.join(process.cwd(), "server", "uploads", "banners");
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+  const bannerStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `banner-${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+    },
+  });
+  const uploadBanner = multer({
+    storage: bannerStorage,
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+    fileFilter: (_req, file, cb) => {
+      if (file.mimetype.startsWith("image/")) cb(null, true);
+      else cb(new Error("Only image files are allowed"));
+    },
+  });
+
+  app.use("/uploads/banners", express.static(UPLOADS_DIR));
+  // ──────────────────────────────────────────────────────────────────────────
+
   // One-time initialization endpoint to seed production database
   app.post("/api/init-database", async (req, res) => {
     try {
@@ -1243,6 +1270,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: error.message || "Failed to generate price list PDF" });
     }
   });
+
+  // ── Banner endpoints ───────────────────────────────────────────────────────
+  // Public: active banners for the popup (no auth needed — shown to all visitors)
+  app.get("/api/banners", async (_req, res) => {
+    try {
+      const activeBanners = await storage.getActiveBanners();
+      res.json(activeBanners);
+    } catch (e) {
+      console.error("[banners]", e);
+      res.status(500).json({ message: "Failed to fetch banners" });
+    }
+  });
+
+  // Admin: all banners (for management panel)
+  app.get("/api/admin/banners", isAdmin, async (_req, res) => {
+    try {
+      res.json(await storage.getBanners());
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch banners" });
+    }
+  });
+
+  // Admin: upload new banner
+  app.post("/api/admin/banners", isAdmin, uploadBanner.single("image"), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: "Image file required" });
+      const redirectUrl = (req.body.redirectUrl as string | undefined) || null;
+      const sortOrder = parseInt(req.body.sortOrder as string) || 0;
+      const banner = await storage.createBanner({
+        imageUrl: `/uploads/banners/${req.file.filename}`,
+        redirectUrl,
+        active: true,
+        sortOrder,
+      });
+      res.json(banner);
+    } catch (e: any) {
+      console.error("[banners]", e);
+      res.status(500).json({ message: e.message || "Failed to create banner" });
+    }
+  });
+
+  // Admin: update banner (active toggle, redirectUrl, sortOrder)
+  app.patch("/api/admin/banners/:id", isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates: Record<string, any> = {};
+      if (req.body.active !== undefined) updates.active = req.body.active;
+      if (req.body.redirectUrl !== undefined) updates.redirectUrl = req.body.redirectUrl || null;
+      if (req.body.sortOrder !== undefined) updates.sortOrder = Number(req.body.sortOrder);
+      const banner = await storage.updateBanner(id, updates);
+      res.json(banner);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to update banner" });
+    }
+  });
+
+  // Admin: delete banner + its file
+  app.delete("/api/admin/banners/:id", isAdmin, async (req, res) => {
+    try {
+      const deleted = await storage.deleteBanner(req.params.id);
+      // Remove the physical file
+      const filePath = path.join(process.cwd(), "server", deleted.imageUrl);
+      fs.unlink(filePath, (err) => {
+        if (err) console.warn("[banners] Could not delete file:", filePath, err.message);
+      });
+      res.json({ message: "Banner deleted" });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to delete banner" });
+    }
+  });
+  // ──────────────────────────────────────────────────────────────────────────
 
   app.get("/api/image-search", isAuthenticated, async (req, res) => {
     const sku = ((req.query.sku as string) || "").trim();

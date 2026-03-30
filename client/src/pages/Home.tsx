@@ -6,6 +6,7 @@ import Header from "@/components/Header";
 import ProductListTable from "@/components/ProductListTable";
 import CartSidebar, { type CartItem } from "@/components/CartSidebar";
 import CustomerSidebar from "@/components/CustomerSidebar";
+import BannerPopup from "@/components/BannerPopup";
 import { useAuth } from "@/hooks/useAuth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -763,6 +764,7 @@ export default function Home() {
 
   return (
     <>
+      {!isAdmin && <BannerPopup />}
       <Helmet>
         <title>CHIP Technologies B2B — Оптовый каталог IT-оборудования</title>
         <meta name="description" content="Оптовые цены на ноутбуки, серверы, мониторы, сетевое оборудование и комплектующие. Портал для корпоративных клиентов CHIP Technologies." />

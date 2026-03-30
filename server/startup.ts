@@ -258,6 +258,17 @@ async function createTablesManually() {
     );
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS banners (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      image_url VARCHAR(500) NOT NULL,
+      redirect_url VARCHAR(500),
+      active BOOLEAN NOT NULL DEFAULT true,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
   // Note: the "sessions" table is created automatically by connect-pg-simple
   // (see auth.ts: createTableIfMissing: true). Do not create it here.
 

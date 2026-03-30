@@ -197,6 +197,19 @@ export const orderComments = pgTable("order_comments", {
 export type OrderComment = typeof orderComments.$inferSelect;
 export type InsertOrderComment = typeof orderComments.$inferInsert;
 
+// Banners table for promotional popup carousel
+export const banners = pgTable("banners", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  imageUrl: varchar("image_url", { length: 500 }).notNull(),
+  redirectUrl: varchar("redirect_url", { length: 500 }),
+  active: boolean("active").default(true).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type Banner = typeof banners.$inferSelect;
+export type InsertBanner = typeof banners.$inferInsert;
+
 // Password reset tokens table
 export const passwordResetTokens = pgTable("password_reset_tokens", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
