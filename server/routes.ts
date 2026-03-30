@@ -1271,6 +1271,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Shared cart endpoints ──────────────────────────────────────────────────
+  // Admin: create a shared cart link
+  app.post("/api/admin/shared-carts", isAdmin, async (req, res) => {
+    try {
+      const { name, items, expiresAt } = req.body;
+      if (!name || !Array.isArray(items) || items.length === 0)
+        return res.status(400).json({ message: "name and items required" });
+
+      const id = Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6);
+      const cart = await storage.createSharedCart({
+        id,
+        name,
+        items,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+      });
+      const baseUrl = process.env.APP_URL || "https://b2b.chip.am";
+      res.json({ ...cart, url: `${baseUrl}/?cart=${cart.id}` });
+    } catch (e) {
+      console.error("[shared-carts]", e);
+      res.status(500).json({ message: "Failed to create shared cart" });
+    }
+  });
+
+  // Admin: list all shared carts
+  app.get("/api/admin/shared-carts", isAdmin, async (_req, res) => {
+    try {
+      const carts = await storage.listSharedCarts();
+      const baseUrl = process.env.APP_URL || "https://b2b.chip.am";
+      res.json(carts.map(c => ({ ...c, url: `${baseUrl}/?cart=${c.id}` })));
+    } catch (e) {
+      res.status(500).json({ message: "Failed to list shared carts" });
+    }
+  });
+
+  // Admin: delete a shared cart
+  app.delete("/api/admin/shared-carts/:id", isAdmin, async (req, res) => {
+    try {
+      await storage.deleteSharedCart(req.params.id);
+      res.json({ message: "Deleted" });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to delete shared cart" });
+    }
+  });
+
+  // Public: resolve a shared cart link (used by customer on home page)
+  app.get("/api/sc/:id", async (req, res) => {
+    try {
+      const cart = await storage.getSharedCart(req.params.id);
+      if (!cart) return res.status(404).json({ message: "Ссылка не найдена" });
+      if (cart.expiresAt && new Date() > cart.expiresAt)
+        return res.status(410).json({ message: "Срок действия ссылки истёк" });
+
+      await storage.incrementSharedCartClicks(req.params.id);
+
+      // Resolve product details for each item
+      const items = cart.items as Array<{ productId: string; quantity: number }>;
+      const resolved = await Promise.all(
+        items.map(async (item) => {
+          const product = await storage.getProductById(item.productId);
+          return product ? { productId: item.productId, quantity: item.quantity, product } : null;
+        })
+      );
+
+      const available = resolved.filter(Boolean);
+      const skippedCount = resolved.length - available.length;
+      res.json({ name: cart.name, items: available, skippedCount });
+    } catch (e) {
+      console.error("[sc]", e);
+      res.status(500).json({ message: "Failed to resolve cart" });
+    }
+  });
+  // ──────────────────────────────────────────────────────────────────────────
+
   // ── Banner endpoints ───────────────────────────────────────────────────────
   // Public: active banners for the popup (no auth needed — shown to all visitors)
   app.get("/api/banners", async (_req, res) => {

@@ -8,6 +8,7 @@ import {
   offers,
   passwordResetTokens,
   banners,
+  sharedCarts,
   type Customer,
   type Product,
   type InsertProduct,
@@ -24,6 +25,7 @@ import {
   type PasswordResetToken,
   type Banner,
   type InsertBanner,
+  type SharedCart,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, gt } from "drizzle-orm";
@@ -101,6 +103,13 @@ export interface IStorage {
   getValidResetToken(token: string): Promise<PasswordResetToken | undefined>;
   markResetTokenUsed(tokenId: string): Promise<void>;
   updateCustomerPassword(customerId: string, hashedPassword: string): Promise<void>;
+
+  // Shared cart operations
+  createSharedCart(cart: Omit<SharedCart, 'clickCount' | 'createdAt'>): Promise<SharedCart>;
+  getSharedCart(id: string): Promise<SharedCart | undefined>;
+  listSharedCarts(): Promise<SharedCart[]>;
+  incrementSharedCartClicks(id: string): Promise<void>;
+  deleteSharedCart(id: string): Promise<void>;
 
   // Banner operations
   getBanners(): Promise<Banner[]>;
@@ -669,6 +678,31 @@ export class DatabaseStorage implements IStorage {
       .update(customers)
       .set({ password: hashedPassword, updatedAt: new Date() })
       .where(eq(customers.id, customerId));
+  }
+
+  // Shared cart operations
+  async createSharedCart(cart: Omit<SharedCart, 'clickCount' | 'createdAt'>): Promise<SharedCart> {
+    const [created] = await db.insert(sharedCarts).values({ ...cart, clickCount: 0 }).returning();
+    return created;
+  }
+
+  async getSharedCart(id: string): Promise<SharedCart | undefined> {
+    const [cart] = await db.select().from(sharedCarts).where(eq(sharedCarts.id, id));
+    return cart;
+  }
+
+  async listSharedCarts(): Promise<SharedCart[]> {
+    return db.select().from(sharedCarts).orderBy(desc(sharedCarts.createdAt));
+  }
+
+  async incrementSharedCartClicks(id: string): Promise<void> {
+    await db.update(sharedCarts)
+      .set({ clickCount: sql`${sharedCarts.clickCount} + 1` })
+      .where(eq(sharedCarts.id, id));
+  }
+
+  async deleteSharedCart(id: string): Promise<void> {
+    await db.delete(sharedCarts).where(eq(sharedCarts.id, id));
   }
 
   // Banner operations

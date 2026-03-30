@@ -1,11 +1,12 @@
 
 import { useState, useEffect } from "react";
-import { ShoppingCart, Plus, Minus, X, Save, ArrowUp, ArrowDown, Loader2, ImageOff } from "lucide-react";
+import { ShoppingCart, Plus, Minus, X, Save, ArrowUp, ArrowDown, Loader2, ImageOff, Link2, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { Product } from "@shared/schema";
 import { calculatePrice } from "@shared/utils";
 
@@ -41,6 +42,15 @@ export default function ProductListTable({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [skuPopup, setSkuPopup] = useState<{ sku: string; images: string[]; loading: boolean } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [cartLinkDialog, setCartLinkDialog] = useState<{
+    linkName: string;
+    quantities: Record<string, number>;
+    expiresAt: string;
+    generatedUrl: string | null;
+    creating: boolean;
+    copied: boolean;
+  } | null>(null);
 
   const openSkuImages = async (sku: string, brand?: string | null) => {
     setSkuPopup({ sku, images: [], loading: true });
@@ -302,10 +312,61 @@ export default function ProductListTable({
     );
   };
 
+  const openCartLinkDialog = () => {
+    const selected = products.filter(p => selectedIds.has(p.id));
+    const quantities: Record<string, number> = {};
+    selected.forEach(p => { quantities[p.id] = Math.max(1, p.moq ?? 1); });
+    setCartLinkDialog({ linkName: "", quantities, expiresAt: "", generatedUrl: null, creating: false, copied: false });
+  };
+
+  const createCartLink = async () => {
+    if (!cartLinkDialog) return;
+    setCartLinkDialog(d => d ? { ...d, creating: true } : d);
+    try {
+      const items = Object.entries(cartLinkDialog.quantities).map(([productId, quantity]) => ({ productId, quantity }));
+      const body: Record<string, any> = { name: cartLinkDialog.linkName || "Ссылка на корзину", items };
+      if (cartLinkDialog.expiresAt) body.expiresAt = cartLinkDialog.expiresAt;
+      const res = await fetch("/api/admin/shared-carts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      setCartLinkDialog(d => d ? { ...d, generatedUrl: data.url, creating: false } : d);
+    } catch (e: any) {
+      setCartLinkDialog(d => d ? { ...d, creating: false } : d);
+      alert(e.message || "Ошибка при создании ссылки");
+    }
+  };
+
   const renderDesktopTable = () => (
     <div className="overflow-x-auto">
       <div className="min-w-full">
-        <div className={`sticky top-0 z-10 grid items-center ${adminMode ? 'grid-cols-[1fr_120px_120px_120px_80px_100px_120px]' : 'grid-cols-[1fr_100px_120px_120px_120px_80px_140px_100px]'} gap-4 border-b bg-muted/50 px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground`}>
+        {adminMode && selectedIds.size > 0 && (
+          <div className="flex items-center gap-3 px-4 py-2 bg-primary/5 border-b border-primary/20 text-sm">
+            <span className="text-muted-foreground">{selectedIds.size} товаров выбрано</span>
+            <Button size="sm" variant="outline" className="h-7 gap-1" onClick={openCartLinkDialog}>
+              <Link2 className="h-3 w-3" /> Создать ссылку на корзину
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-muted-foreground" onClick={() => setSelectedIds(new Set())}>
+              <X className="h-3 w-3 mr-1" /> Снять выделение
+            </Button>
+          </div>
+        )}
+        <div className={`sticky top-0 z-10 grid items-center ${adminMode ? 'grid-cols-[20px_1fr_120px_120px_120px_80px_100px_120px]' : 'grid-cols-[1fr_100px_120px_120px_120px_80px_140px_100px]'} gap-4 border-b bg-muted/50 px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground`}>
+          {adminMode && (
+            <Checkbox
+              checked={pagedProducts.length > 0 && pagedProducts.every(p => selectedIds.has(p.id))}
+              onCheckedChange={(checked) => {
+                const next = new Set(selectedIds);
+                pagedProducts.forEach(p => checked ? next.add(p.id) : next.delete(p.id));
+                setSelectedIds(next);
+              }}
+              aria-label="Выбрать все"
+            />
+          )}
           <div
             onClick={() => handleSort("name")}
             className="cursor-pointer hover-elevate p-1 -m-1 rounded flex items-center gap-1"
@@ -365,11 +426,24 @@ export default function ProductListTable({
           return (
           <div
             key={product.id}
-            className={`grid ${adminMode ? 'grid-cols-[1fr_120px_120px_120px_80px_100px_120px]' : 'grid-cols-[1fr_100px_120px_120px_120px_80px_140px_100px]'} gap-4 border-b px-4 py-3 hover-elevate ${
+            className={`grid ${adminMode ? 'grid-cols-[20px_1fr_120px_120px_120px_80px_100px_120px]' : 'grid-cols-[1fr_100px_120px_120px_120px_80px_140px_100px]'} gap-4 border-b px-4 py-3 hover-elevate ${
               index % 2 === 0 ? "bg-background" : "bg-muted/20"
             }`}
             data-testid={`product-row-${product.id}`}
           >
+        {adminMode && (
+          <div className="flex items-center">
+            <Checkbox
+              checked={selectedIds.has(product.id)}
+              onCheckedChange={(checked) => {
+                const next = new Set(selectedIds);
+                checked ? next.add(product.id) : next.delete(product.id);
+                setSelectedIds(next);
+              }}
+              aria-label={`Выбрать ${product.name}`}
+            />
+          </div>
+        )}
         <div className="flex flex-col justify-center">
           {adminMode ? (
             <>
@@ -696,6 +770,88 @@ export default function ProductListTable({
             </div>
           </div>
         </>
+      )}
+
+      {/* Cart link creation dialog */}
+      {cartLinkDialog && (
+        <Dialog open onOpenChange={(open) => { if (!open) setCartLinkDialog(null); }}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Создать ссылку на корзину</DialogTitle>
+            </DialogHeader>
+
+            {cartLinkDialog.generatedUrl ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">Ссылка создана. Скопируйте и используйте её в баннере или отправьте клиенту.</p>
+                <div className="flex gap-2">
+                  <Input value={cartLinkDialog.generatedUrl} readOnly className="text-xs" />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0"
+                    onClick={() => {
+                      navigator.clipboard.writeText(cartLinkDialog.generatedUrl!);
+                      setCartLinkDialog(d => d ? { ...d, copied: true } : d);
+                      setTimeout(() => setCartLinkDialog(d => d ? { ...d, copied: false } : d), 2000);
+                    }}
+                  >
+                    {cartLinkDialog.copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <Button className="w-full" variant="outline" onClick={() => setCartLinkDialog(null)}>Закрыть</Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Название ссылки</label>
+                  <Input
+                    placeholder="Например: Акция на мониторы LG"
+                    value={cartLinkDialog.linkName}
+                    onChange={(e) => setCartLinkDialog(d => d ? { ...d, linkName: e.target.value } : d)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Товары и количество</label>
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {products.filter(p => selectedIds.has(p.id)).map(p => (
+                      <div key={p.id} className="flex items-center gap-2">
+                        <span className="flex-1 text-xs truncate" title={p.name}>{p.name}</span>
+                        <Input
+                          type="number"
+                          min={1}
+                          className="w-20 h-7 text-xs"
+                          value={cartLinkDialog.quantities[p.id] ?? 1}
+                          onChange={(e) => setCartLinkDialog(d => d ? {
+                            ...d,
+                            quantities: { ...d.quantities, [p.id]: Math.max(1, parseInt(e.target.value) || 1) }
+                          } : d)}
+                        />
+                        <span className="text-xs text-muted-foreground">шт.</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Срок действия (необязательно)</label>
+                  <Input
+                    type="date"
+                    value={cartLinkDialog.expiresAt}
+                    min={new Date().toISOString().split("T")[0]}
+                    onChange={(e) => setCartLinkDialog(d => d ? { ...d, expiresAt: e.target.value } : d)}
+                  />
+                  <p className="text-xs text-muted-foreground">Оставьте пустым — ссылка бессрочная</p>
+                </div>
+
+                <Button className="w-full" onClick={createCartLink} disabled={cartLinkDialog.creating}>
+                  <Link2 className="h-4 w-4 mr-2" />
+                  {cartLinkDialog.creating ? "Создание..." : "Создать ссылку"}
+                </Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* SKU image search popup */}

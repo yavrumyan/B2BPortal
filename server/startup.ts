@@ -259,6 +259,17 @@ async function createTablesManually() {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS shared_carts (
+      id VARCHAR(20) PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      items JSONB NOT NULL,
+      expires_at TIMESTAMP,
+      click_count INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS banners (
       id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
       image_url VARCHAR(500) NOT NULL,

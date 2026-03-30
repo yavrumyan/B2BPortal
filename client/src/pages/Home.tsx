@@ -433,6 +433,56 @@ export default function Home() {
     }
   }, [backendCart, isAuthenticated]);
 
+  // Handle shared cart link (?cart=ID) — store in sessionStorage, apply when authenticated + products loaded
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const cartId = params.get("cart");
+    if (cartId) {
+      sessionStorage.setItem("pendingSharedCart", cartId);
+      // Clean the URL without reloading
+      const cleanUrl = window.location.pathname + (params.get("section") ? `?section=${params.get("section")}` : "");
+      window.history.replaceState({}, "", cleanUrl);
+    }
+  }, []);
+
+  useEffect(() => {
+    const pendingId = sessionStorage.getItem("pendingSharedCart");
+    if (!pendingId || !isAuthenticated || isAdmin || products.length === 0) return;
+
+    sessionStorage.removeItem("pendingSharedCart");
+    fetch(`/api/sc/${pendingId}`, { credentials: "include" })
+      .then(async (res) => {
+        if (res.status === 410) { toast({ title: "Ссылка устарела", description: "Срок действия этой ссылки на корзину истёк.", variant: "destructive" }); return; }
+        if (!res.ok) { toast({ title: "Ссылка не найдена", variant: "destructive" }); return; }
+        const data = await res.json() as { name: string; items: Array<{ productId: string; quantity: number; product: any }>; skippedCount: number };
+
+        let newCart = [...cartItems];
+        let addedCount = 0;
+        for (const item of data.items) {
+          const product = products.find(p => p.id === item.productId);
+          if (!product) continue;
+          const existing = newCart.find(c => c.id === item.productId);
+          if (existing) {
+            newCart = newCart.map(c => c.id === item.productId ? { ...c, quantity: c.quantity + item.quantity } : c);
+          } else {
+            newCart.push({ id: product.id, name: product.name, price: product.price, quantity: item.quantity, image: product.imageUrl || undefined, moq: product.moq || 0, stock: product.availableQuantity });
+          }
+          addedCount++;
+        }
+
+        setCartItems(newCart);
+        await fetch("/api/cart", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cart: newCart }), credentials: "include" });
+
+        const skipped = data.skippedCount;
+        toast({
+          title: `${addedCount} товаров добавлено в корзину`,
+          description: skipped > 0 ? `${skipped} товаров недоступны и не добавлены.` : undefined,
+        });
+        setIsCartOpen(true);
+      })
+      .catch(() => toast({ title: "Ошибка загрузки корзины", variant: "destructive" }));
+  }, [isAuthenticated, isAdmin, products]);
+
   const handleSectionChange = (section: "products" | "orders" | "inquiries" | "profile") => {
     setActiveSection(section);
     setLocation(`/?section=${section}`);

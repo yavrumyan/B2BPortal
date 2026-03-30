@@ -210,6 +210,18 @@ export const banners = pgTable("banners", {
 export type Banner = typeof banners.$inferSelect;
 export type InsertBanner = typeof banners.$inferInsert;
 
+// Shared cart presets — admin creates, customers apply via link
+export const sharedCarts = pgTable("shared_carts", {
+  id: varchar("id", { length: 20 }).primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  items: jsonb("items").notNull(), // [{productId: string, quantity: number}]
+  expiresAt: timestamp("expires_at"),
+  clickCount: integer("click_count").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type SharedCart = typeof sharedCarts.$inferSelect;
+
 // Password reset tokens table
 export const passwordResetTokens = pgTable("password_reset_tokens", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
