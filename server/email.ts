@@ -187,6 +187,31 @@ export async function sendAdminNewInquiryEmail(customer: Customer) {
   await send(ADMIN_EMAIL, `Новый запрос от ${customer.companyName} — B2B Portal`, html);
 }
 
+// ─── Order comment notifications ─────────────────────────────────────────────
+
+export async function sendAdminNewCommentEmail(customer: Customer, order: Order, commentText: string) {
+  const html = baseTemplate('Новый комментарий к заказу', `
+    <p style="color:#374151;">Клиент <strong>${customer.companyName}</strong> оставил комментарий к заказу <strong>#${order.orderNumber}</strong>:</p>
+    <div style="background:#f9fafb;border-left:4px solid #6b7280;padding:12px 16px;margin:16px 0;border-radius:0 6px 6px 0;">
+      <p style="margin:0;color:#374151;font-style:italic;">${commentText}</p>
+    </div>
+    ${btn(`${APP_URL}/admin?section=orders`, 'Открыть заказ в панели')}
+  `);
+  await send(ADMIN_EMAIL, `Комментарий к заказу #${order.orderNumber} от ${customer.companyName}`, html);
+}
+
+export async function sendCustomerNewCommentEmail(customer: Customer, order: Order, commentText: string) {
+  const html = baseTemplate(`Новый ответ по заказу #${order.orderNumber}`, `
+    <p style="color:#374151;">Здравствуйте, <strong>${customer.representativeName}</strong>!</p>
+    <p style="color:#374151;">Менеджер оставил комментарий к вашему заказу <strong>#${order.orderNumber}</strong>:</p>
+    <div style="background:#f0f9ff;border-left:4px solid #1d4ed8;padding:12px 16px;margin:16px 0;border-radius:0 6px 6px 0;">
+      <p style="margin:0;color:#374151;font-style:italic;">${commentText}</p>
+    </div>
+    ${btn(`${APP_URL}/orders/${order.id}`, 'Открыть заказ')}
+  `);
+  await send(customer.email, `Ответ менеджера по заказу #${order.orderNumber} — B2B Portal chip.am`, html);
+}
+
 // ─── Overdue payment reminders ────────────────────────────────────────────────
 
 export async function sendOverdueReminderEmail(customer: Customer, overdueOrders: Order[]) {

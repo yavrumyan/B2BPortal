@@ -815,19 +815,19 @@ export default function ProductListTable({
                   <label className="text-sm font-medium">Товары и количество</label>
                   <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                     {products.filter(p => selectedIds.has(p.id)).map(p => (
-                      <div key={p.id} className="flex items-center gap-2">
-                        <span className="flex-1 text-xs truncate" title={p.name}>{p.name}</span>
+                      <div key={p.id} className="flex items-center gap-2 min-w-0">
+                        <span className="flex-1 text-xs truncate min-w-0" title={p.name}>{p.name}</span>
                         <Input
                           type="number"
                           min={1}
-                          className="w-20 h-7 text-xs"
+                          className="w-20 h-7 text-xs shrink-0"
                           value={cartLinkDialog.quantities[p.id] ?? 1}
                           onChange={(e) => setCartLinkDialog(d => d ? {
                             ...d,
                             quantities: { ...d.quantities, [p.id]: Math.max(1, parseInt(e.target.value) || 1) }
                           } : d)}
                         />
-                        <span className="text-xs text-muted-foreground">шт.</span>
+                        <span className="text-xs text-muted-foreground shrink-0">шт.</span>
                       </div>
                     ))}
                   </div>

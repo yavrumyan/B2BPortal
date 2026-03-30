@@ -1188,6 +1188,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isInternal: internal,
       });
 
+      // Send email notifications (fire-and-forget)
+      const { sendAdminNewCommentEmail, sendCustomerNewCommentEmail } = await import("./email.js");
+      if (customer.role !== 'admin') {
+        // Customer posted → notify admin
+        sendAdminNewCommentEmail(customer, order, message.trim()).catch(err =>
+          console.error("[EMAIL] Failed to send admin comment notification:", err)
+        );
+      } else if (!internal) {
+        // Admin posted a non-internal comment → notify the order's customer
+        const orderCustomer = await storage.getCustomerById(order.customerId);
+        if (orderCustomer && orderCustomer.role !== 'admin') {
+          sendCustomerNewCommentEmail(orderCustomer, order, message.trim()).catch(err =>
+            console.error("[EMAIL] Failed to send customer comment notification:", err)
+          );
+        }
+      }
+
       res.json(comment);
     } catch (error: any) {
       console.error("Add comment error:", error);
