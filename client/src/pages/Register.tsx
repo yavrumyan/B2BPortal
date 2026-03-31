@@ -56,6 +56,12 @@ export default function Register() {
       return await apiRequest("POST", "/api/registrations", data);
     },
     onSuccess: () => {
+      // Fire Google Ads conversion (Sign-up)
+      if (typeof window !== "undefined" && (window as any).gtag) {
+        (window as any).gtag("event", "conversion", {
+          send_to: "AW-847619425/TL32CLXkx5IcEOHKlpQD",
+        });
+      }
       toast({
         title: "Заявка отправлена",
         description: "Ваша заявка отправлена на рассмотрение. Вы получите уведомление после проверки администратором.",
