@@ -1275,12 +1275,13 @@ export default function Home() {
                         Товары не найдены по выбранным фильтрам
                       </div>
                     ) : (
-                      <ProductListTable 
-                        products={filteredProducts} 
-                        onAddToCart={handleAddToCart} 
+                      <ProductListTable
+                        products={filteredProducts}
+                        onAddToCart={handleAddToCart}
                         customerType={customer?.customerType || "корпоративный"}
                         corporateMarkupPercentage={settings?.corporateMarkupPercentage}
                         governmentMarkupPercentage={settings?.governmentMarkupPercentage}
+                        isAuthenticated={isAuthenticated}
                       />
                     )}
                   </>

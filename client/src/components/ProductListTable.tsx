@@ -22,6 +22,7 @@ interface ProductListTableProps {
   customerType?: string;
   corporateMarkupPercentage?: number;
   governmentMarkupPercentage?: number;
+  isAuthenticated?: boolean;
 }
 
 export default function ProductListTable({
@@ -33,6 +34,7 @@ export default function ProductListTable({
   customerType = "дилер",
   corporateMarkupPercentage = 10,
   governmentMarkupPercentage = 10,
+  isAuthenticated = false,
 }: ProductListTableProps) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [editingProduct, setEditingProduct] = useState<Record<string, Partial<Product>>>({});
@@ -491,7 +493,7 @@ export default function ProductListTable({
                 {product.name}
               </div>
               {product.sku && (
-                onAddToCart ? (
+                isAuthenticated ? (
                   <button
                     className="text-xs text-muted-foreground hover:text-primary hover:underline text-left"
                     onClick={() => openSkuImages(product.sku!, product.brand)}

@@ -1437,31 +1437,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const sku = ((req.query.sku as string) || "").trim();
     if (!sku) return res.status(400).json({ message: "SKU required" });
 
-    // Google Custom Search API — direct image search, no LLM needed (~200ms)
+    // Gemini 2.0 Flash with Google Search grounding — fast (~1-2s), no thinking overhead
     try {
       const apiKey = process.env.GEMINI_API_KEY || "";
-      const cx = process.env.GOOGLE_CSE_CX || "";
-      if (!apiKey || !cx) {
-        console.error("[image-search] Missing GEMINI_API_KEY or GOOGLE_CSE_CX env var");
+      if (!apiKey) return res.json({ images: [] });
+
+      const prompt = `Find 4 product images for: "${sku}"
+Search retailer sites (Amazon, Newegg, B&H Photo, manufacturer sites) for this exact product.
+Return ONLY a JSON array of 4 direct image URLs (jpg/png/webp). No explanation.
+Example: ["https://m.media-amazon.com/images/I/example.jpg"]
+If not found return []`;
+
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            tools: [{ googleSearch: {} }],
+          }),
+        }
+      );
+      const geminiData = await geminiRes.json() as any;
+
+      if (!geminiRes.ok) {
+        console.error("[image-search] Gemini error:", JSON.stringify(geminiData).substring(0, 500));
         return res.json({ images: [] });
       }
 
-      const url = `https://www.googleapis.com/customsearch/v1?key=${encodeURIComponent(apiKey)}&cx=${encodeURIComponent(cx)}&q=${encodeURIComponent(sku + " product")}&searchType=image&num=4&imgSize=large&safe=active`;
+      // Collect text from all parts (grounding may split across parts)
+      const parts: any[] = geminiData?.candidates?.[0]?.content?.parts ?? [];
+      const text: string = parts.filter((p: any) => p.text).map((p: any) => p.text).join("\n").trim();
+      console.log("[image-search] SKU:", sku, "| response:", text.substring(0, 400));
 
-      const searchRes = await fetch(url);
-      const data = await searchRes.json() as any;
+      let images: string[] = [];
 
-      if (!searchRes.ok) {
-        console.error("[image-search] Google CSE error:", JSON.stringify(data).substring(0, 500));
-        return res.json({ images: [] });
+      // Try JSON array parse
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        try { images = JSON.parse(jsonMatch[0]).filter((u: any) => typeof u === "string" && u.startsWith("http")); } catch {}
       }
 
-      const images: string[] = (data.items || [])
-        .map((item: any) => item.link)
-        .filter((link: any) => typeof link === "string" && link.startsWith("http"));
+      // Fallback: extract image URLs with regex
+      if (!images.length) {
+        const urlRe = /https?:\/\/[^\s"'<>\]\)]+\.(?:jpe?g|png|webp)(?:[?#][^\s"'<>\]\)]*)?/gi;
+        images = [...text.matchAll(urlRe)].map(m => m[0]);
+      }
 
-      console.log("[image-search] SKU:", sku, "| found", images.length, "images");
-      res.json({ images: images.slice(0, 4) });
+      const unique = [...new Set(images)].slice(0, 4);
+      console.log("[image-search] SKU:", sku, "| found", unique.length, "images");
+      res.json({ images: unique });
     } catch (e) {
       console.error("[image-search] error:", e);
       res.json({ images: [] });
