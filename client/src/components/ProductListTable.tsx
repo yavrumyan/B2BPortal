@@ -491,13 +491,19 @@ export default function ProductListTable({
                 {product.name}
               </div>
               {product.sku && (
-                <button
-                  className="text-xs text-muted-foreground hover:text-primary hover:underline text-left"
-                  onClick={() => openSkuImages(product.sku!, product.brand)}
-                  title="Нажмите для поиска изображений"
-                >
-                  Артикул: {product.sku}
-                </button>
+                onAddToCart ? (
+                  <button
+                    className="text-xs text-muted-foreground hover:text-primary hover:underline text-left"
+                    onClick={() => openSkuImages(product.sku!, product.brand)}
+                    title="Нажмите для поиска изображений"
+                  >
+                    Артикул: {product.sku}
+                  </button>
+                ) : (
+                  <span className="text-xs text-muted-foreground">
+                    Артикул: {product.sku}
+                  </span>
+                )
               )}
             </>
           )}
