@@ -1437,71 +1437,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const sku = ((req.query.sku as string) || "").trim();
     if (!sku) return res.status(400).json({ message: "SKU required" });
 
-    // Use Gemini 2.5 Flash with Google Search grounding via REST API (no SDK needed)
+    // Google Custom Search API — direct image search, no LLM needed (~200ms)
     try {
       const apiKey = process.env.GEMINI_API_KEY || "";
-      if (!apiKey) return res.json({ images: [] });
-
-      const prompt = `Search for product images of "${sku}".
-Find 4 different direct image URLs showing this product from online retailers, manufacturer sites, or product databases (e.g. Amazon, Newegg, manufacturer CDN).
-Each URL must point directly to an image file.
-Return your answer as a JSON array of URL strings, nothing else.
-Example: ["https://cdn.example.com/product1.jpg", "https://images.example.com/product2.png"]`;
-
-      const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            tools: [{ googleSearch: {} }],
-          }),
-        }
-      );
-      const geminiData = await geminiRes.json() as any;
-
-      if (!geminiRes.ok) {
-        console.error("[image-search] Gemini API error:", JSON.stringify(geminiData).substring(0, 500));
+      const cx = process.env.GOOGLE_CSE_CX || "";
+      if (!apiKey || !cx) {
+        console.error("[image-search] Missing GEMINI_API_KEY or GOOGLE_CSE_CX env var");
         return res.json({ images: [] });
       }
 
-      // Grounding responses can have multiple parts; collect text from all of them
-      const parts: any[] = geminiData?.candidates?.[0]?.content?.parts ?? [];
-      const text: string = parts.filter((p: any) => p.text).map((p: any) => p.text).join("\n").trim();
-      console.log("[image-search] SKU:", sku, "| response text:", text.substring(0, 500));
+      const url = `https://www.googleapis.com/customsearch/v1?key=${encodeURIComponent(apiKey)}&cx=${encodeURIComponent(cx)}&q=${encodeURIComponent(sku + " product")}&searchType=image&num=4&imgSize=large&safe=active`;
 
-      // Try JSON array parse first (greedy match to capture full array)
-      let images: string[] = [];
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        try { images = JSON.parse(jsonMatch[0]).filter((u: any) => typeof u === "string" && u.startsWith("http")); } catch {}
+      const searchRes = await fetch(url);
+      const data = await searchRes.json() as any;
+
+      if (!searchRes.ok) {
+        console.error("[image-search] Google CSE error:", JSON.stringify(data).substring(0, 500));
+        return res.json({ images: [] });
       }
 
-      // Fallback: extract any image-like URLs from the text
-      if (!images.length) {
-        const urlRe = /https?:\/\/[^\s"'<>\]\)]+\.(?:jpe?g|png|webp)(?:[?#][^\s"'<>\]\)]*)?/gi;
-        images = [...text.matchAll(urlRe)].map(m => m[0]);
-      }
+      const images: string[] = (data.items || [])
+        .map((item: any) => item.link)
+        .filter((link: any) => typeof link === "string" && link.startsWith("http"));
 
-      // Additional fallback: extract image URLs from grounding metadata
-      if (images.length < 4) {
-        try {
-          const metadata = geminiData?.candidates?.[0]?.groundingMetadata;
-          const chunks: any[] = metadata?.groundingChunks ?? [];
-          for (const chunk of chunks) {
-            const uri = chunk?.web?.uri || "";
-            if (/\.(?:jpe?g|png|webp)(?:[?#]|$)/i.test(uri) && !images.includes(uri)) {
-              images.push(uri);
-            }
-          }
-        } catch {}
-      }
-
-      // Deduplicate and limit to 4
-      const unique = [...new Set(images)].slice(0, 4);
-      console.log("[image-search] SKU:", sku, "| found", unique.length, "images");
-      res.json({ images: unique });
+      console.log("[image-search] SKU:", sku, "| found", images.length, "images");
+      res.json({ images: images.slice(0, 4) });
     } catch (e) {
       console.error("[image-search] error:", e);
       res.json({ images: [] });
