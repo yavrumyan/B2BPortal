@@ -1480,10 +1480,10 @@ Return [] if none found.`;
         images = [...text.matchAll(urlRe)].map(m => m[0]);
       }
 
-      res.json({ images: images.slice(0, 4) });
+      res.json({ images: images.slice(0, 4), _debug: text.substring(0, 800) });
     } catch (e) {
       console.error("[image-search] error:", e);
-      res.json({ images: [] });
+      res.json({ images: [], _debug: String(e) });
     }
   });
 
