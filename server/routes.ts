@@ -1439,24 +1439,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const query = sku + " product";
 
-    // Use Gemini with Google Search grounding to find real product image URLs
+    // Use Gemini 2.5 Flash with Google Search grounding via REST API (no SDK needed)
     try {
-      const { GoogleGenerativeAI } = await import("@google/generative-ai");
       const apiKey = process.env.GEMINI_API_KEY || "AIzaSyCpZ7HN0AHbVkPmKndMxPysNXOdD0j4GKo";
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({
-        model: "gemini-2.5-flash",
-        tools: [{ googleSearch: {} } as any],
-      });
-
       const prompt = `Search the web for product images of: "${query}"
 Find up to 4 direct image URLs (.jpg, .png, .webp) from manufacturer websites or product databases.
 Return ONLY a valid JSON array of direct image URLs. No markdown, no explanation.
 Example: ["https://example.com/product.jpg"]
 Return [] if no images found.`;
 
-      const result = await model.generateContent(prompt);
-      const text = result.response.text().trim();
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            tools: [{ googleSearch: {} }],
+          }),
+        }
+      );
+      const geminiData = await geminiRes.json() as any;
+      const text: string = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
       const jsonMatch = text.match(/\[[\s\S]*?\]/);
       const images: string[] = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
       res.json({ images: images.slice(0, 4) });
