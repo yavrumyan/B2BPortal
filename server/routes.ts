@@ -1439,7 +1439,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Use Gemini 2.5 Flash with Google Search grounding via REST API (no SDK needed)
     try {
-      const apiKey = process.env.GEMINI_API_KEY || "AIzaSyCpZ7HN0AHbVkPmKndMxPysNXOdD0j4GKo";
+      const apiKey = process.env.GEMINI_API_KEY || "AIzaSyB_H-3l8zp20AEZsAH_M3_CbRowGMCr2zo";
       const prompt = `Find product images for: ${sku}
 List up to 4 direct image URLs (ending in .jpg, .jpeg, .png, or .webp) from manufacturer websites, retailers, or product databases.
 Return ONLY a JSON array of strings. Example: ["https://example.com/img.jpg"]
@@ -1459,9 +1459,8 @@ Return [] if none found.`;
       const geminiData = await geminiRes.json() as any;
 
       if (!geminiRes.ok) {
-        const errStr = JSON.stringify(geminiData).substring(0, 800);
-        console.error("[image-search] Gemini API error:", errStr);
-        return res.json({ images: [], _debug: `HTTP ${geminiRes.status}: ${errStr}` });
+        console.error("[image-search] Gemini API error:", JSON.stringify(geminiData).substring(0, 500));
+        return res.json({ images: [] });
       }
 
       // Grounding responses can have multiple parts; collect text from all of them
@@ -1481,10 +1480,10 @@ Return [] if none found.`;
         images = [...text.matchAll(urlRe)].map(m => m[0]);
       }
 
-      res.json({ images: images.slice(0, 4), _debug: text.substring(0, 800) });
+      res.json({ images: images.slice(0, 4) });
     } catch (e) {
       console.error("[image-search] error:", e);
-      res.json({ images: [], _debug: String(e) });
+      res.json({ images: [] });
     }
   });
 
