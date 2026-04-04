@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react";
-import { ShoppingCart, Plus, Minus, X, Save, ArrowUp, ArrowDown, Loader2, ImageOff, Link2, Copy, Check } from "lucide-react";
+import { ShoppingCart, Plus, Minus, X, Save, ArrowUp, ArrowDown, Link2, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -41,7 +41,6 @@ export default function ProductListTable({
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
-  const [skuPopup, setSkuPopup] = useState<{ sku: string; images: string[]; loading: boolean } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [cartLinkDialog, setCartLinkDialog] = useState<{
     linkName: string;
@@ -52,16 +51,9 @@ export default function ProductListTable({
     copied: boolean;
   } | null>(null);
 
-  const openSkuImages = async (sku: string, brand?: string | null) => {
-    setSkuPopup({ sku, images: [], loading: true });
+  const openSkuImages = (sku: string, brand?: string | null) => {
     const query = [brand, sku].filter(Boolean).join(" ");
-    try {
-      const res = await fetch(`/api/image-search?sku=${encodeURIComponent(query)}`);
-      const data = await res.json();
-      setSkuPopup({ sku, images: data.images || [], loading: false });
-    } catch {
-      setSkuPopup({ sku, images: [], loading: false });
-    }
+    window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}&tbm=isch`, "_blank", "noopener,noreferrer");
   };
 
   // Reset to page 1 whenever the search term changes
@@ -854,40 +846,6 @@ export default function ProductListTable({
         </Dialog>
       )}
 
-      {/* SKU image search popup */}
-      <Dialog open={!!skuPopup} onOpenChange={(open) => { if (!open) setSkuPopup(null); }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-medium text-muted-foreground">
-              Изображения: <span className="text-foreground">{skuPopup?.sku}</span>
-            </DialogTitle>
-          </DialogHeader>
-
-          {skuPopup?.loading ? (
-            <div className="flex justify-center items-center py-10">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : skuPopup?.images.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
-              <ImageOff className="h-8 w-8" />
-              <span className="text-sm">Изображения не найдены</span>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-2">
-              {skuPopup?.images.map((src, i) => (
-                <a key={i} href={src} target="_blank" rel="noopener noreferrer">
-                  <img
-                    src={src}
-                    alt={`${skuPopup?.sku} image ${i + 1}`}
-                    className="w-full h-40 object-contain rounded border bg-muted/30 hover:opacity-80 transition-opacity"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                  />
-                </a>
-              ))}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
