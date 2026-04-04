@@ -1439,7 +1439,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Use Gemini 2.5 Flash with Google Search grounding via REST API (no SDK needed)
     try {
-      const apiKey = process.env.GEMINI_API_KEY || "AIzaSyATaTqxIpnvcMcsvcYECcn3c_EJU6ZEtvI";
+      const apiKey = process.env.GEMINI_API_KEY || "";
       const prompt = `Find product images for: ${sku}
 List up to 4 direct image URLs (ending in .jpg, .jpeg, .png, or .webp) from manufacturer websites, retailers, or product databases.
 Return ONLY a JSON array of strings. Example: ["https://example.com/img.jpg"]
