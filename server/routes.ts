@@ -1459,8 +1459,9 @@ Return [] if none found.`;
       const geminiData = await geminiRes.json() as any;
 
       if (!geminiRes.ok) {
-        console.error("[image-search] Gemini API error:", JSON.stringify(geminiData).substring(0, 500));
-        return res.json({ images: [] });
+        const errStr = JSON.stringify(geminiData).substring(0, 800);
+        console.error("[image-search] Gemini API error:", errStr);
+        return res.json({ images: [], _debug: `HTTP ${geminiRes.status}: ${errStr}` });
       }
 
       // Grounding responses can have multiple parts; collect text from all of them
