@@ -1437,31 +1437,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const sku = ((req.query.sku as string) || "").trim();
     if (!sku) return res.status(400).json({ message: "SKU required" });
 
+    const query = sku + " product";
+
+    // If Google Custom Search API credentials are configured, use them (more reliable from servers)
+    if (process.env.GOOGLE_SEARCH_API_KEY && process.env.GOOGLE_SEARCH_CX) {
+      try {
+        const url = `https://www.googleapis.com/customsearch/v1?key=${process.env.GOOGLE_SEARCH_API_KEY}&cx=${process.env.GOOGLE_SEARCH_CX}&q=${encodeURIComponent(query)}&searchType=image&num=4`;
+        const data = await fetch(url).then((r) => r.json()) as { items?: Array<{ link: string; image?: { thumbnailLink: string } }> };
+        const images = (data.items || []).slice(0, 4).map((item) => item.image?.thumbnailLink || item.link);
+        return res.json({ images });
+      } catch (e) {
+        console.error("[image-search] Google API error:", e);
+        return res.json({ images: [] });
+      }
+    }
+
+    // Fallback: DuckDuckGo scraping
     try {
       // Step 1: get the vqd token DuckDuckGo requires for image queries
-      const ddgHtml = await fetch(
-        `https://duckduckgo.com/?q=${encodeURIComponent(sku + " product")}&ia=images`,
+      const ddgRes = await fetch(
+        `https://duckduckgo.com/?q=${encodeURIComponent(query)}&ia=images`,
         { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" } }
-      ).then((r) => r.text());
+      );
+      const ddgHtml = await ddgRes.text();
+      console.log(`[image-search] DDG step1 status=${ddgRes.status} htmlLen=${ddgHtml.length} htmlStart=${ddgHtml.substring(0, 200)}`);
 
       const vqdMatch = ddgHtml.match(/vqd=['"]?([\d-]+)['"]?/);
-      if (!vqdMatch) return res.json({ images: [] });
+      if (!vqdMatch) {
+        console.warn("[image-search] vqd token not found in DDG response");
+        return res.json({ images: [] });
+      }
 
       // Step 2: fetch image results JSON
-      const imgData = await fetch(
-        `https://duckduckgo.com/i.js?q=${encodeURIComponent(sku + " product")}&o=json&vqd=${vqdMatch[1]}&f=,,,,,&p=1`,
+      const imgRes = await fetch(
+        `https://duckduckgo.com/i.js?q=${encodeURIComponent(query)}&o=json&vqd=${vqdMatch[1]}&f=,,,,,&p=1`,
         {
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Referer": "https://duckduckgo.com/",
           },
         }
-      ).then((r) => r.json()) as { results?: Array<{ image: string; thumbnail: string }> };
+      );
+      const imgText = await imgRes.text();
+      console.log(`[image-search] DDG step2 status=${imgRes.status} bodyStart=${imgText.substring(0, 200)}`);
+      const imgData = JSON.parse(imgText) as { results?: Array<{ image: string; thumbnail: string }> };
 
       const images = (imgData.results || []).slice(0, 4).map((r) => r.thumbnail || r.image);
       res.json({ images });
     } catch (e) {
-      console.error("[image-search]", e);
+      console.error("[image-search] DDG error:", e);
       res.json({ images: [] });
     }
   });
