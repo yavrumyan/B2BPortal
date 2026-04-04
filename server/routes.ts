@@ -1439,53 +1439,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const query = sku + " product";
 
-    // If Google Custom Search API credentials are configured, use them (more reliable from servers)
-    if (process.env.GOOGLE_SEARCH_API_KEY && process.env.GOOGLE_SEARCH_CX) {
-      try {
-        const url = `https://www.googleapis.com/customsearch/v1?key=${process.env.GOOGLE_SEARCH_API_KEY}&cx=${process.env.GOOGLE_SEARCH_CX}&q=${encodeURIComponent(query)}&searchType=image&num=4`;
-        const data = await fetch(url).then((r) => r.json()) as { items?: Array<{ link: string; image?: { thumbnailLink: string } }> };
-        const images = (data.items || []).slice(0, 4).map((item) => item.image?.thumbnailLink || item.link);
-        return res.json({ images });
-      } catch (e) {
-        console.error("[image-search] Google API error:", e);
-        return res.json({ images: [] });
-      }
-    }
-
-    // Fallback: DuckDuckGo scraping
+    // Use Gemini Flash Lite to find product image URLs
     try {
-      // Step 1: get the vqd token DuckDuckGo requires for image queries
-      const ddgRes = await fetch(
-        `https://duckduckgo.com/?q=${encodeURIComponent(query)}&ia=images`,
-        { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" } }
-      );
-      const ddgHtml = await ddgRes.text();
-      console.log(`[image-search] DDG step1 status=${ddgRes.status} htmlLen=${ddgHtml.length} htmlStart=${ddgHtml.substring(0, 200)}`);
+      const { GoogleGenerativeAI } = await import("@google/generative-ai");
+      const apiKey = process.env.GEMINI_API_KEY || "AIzaSyCpZ7HN0AHbVkPmKndMxPysNXOdD0j4GKo";
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite-preview-06-17" });
 
-      const vqdMatch = ddgHtml.match(/vqd=['"]?([\d-]+)['"]?/);
-      if (!vqdMatch) {
-        console.warn("[image-search] vqd token not found in DDG response");
-        return res.json({ images: [] });
-      }
+      const prompt = `Find up to 4 direct image URLs (.jpg, .png, .webp) for this IT product: "${query}".
+Return ONLY a valid JSON array of image URLs from manufacturer websites or well-known product databases (e.g. manufacturer.com, bhphotovideo.com, newegg.com, notebookcheck.net, gsmarena.com).
+No markdown, no explanation — just the raw JSON array. Example: ["https://example.com/img.jpg"]
+If you cannot find reliable URLs, return [].`;
 
-      // Step 2: fetch image results JSON
-      const imgRes = await fetch(
-        `https://duckduckgo.com/i.js?q=${encodeURIComponent(query)}&o=json&vqd=${vqdMatch[1]}&f=,,,,,&p=1`,
-        {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Referer": "https://duckduckgo.com/",
-          },
-        }
-      );
-      const imgText = await imgRes.text();
-      console.log(`[image-search] DDG step2 status=${imgRes.status} bodyStart=${imgText.substring(0, 200)}`);
-      const imgData = JSON.parse(imgText) as { results?: Array<{ image: string; thumbnail: string }> };
-
-      const images = (imgData.results || []).slice(0, 4).map((r) => r.thumbnail || r.image);
-      res.json({ images });
+      const result = await model.generateContent(prompt);
+      const text = result.response.text().trim();
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      const images: string[] = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+      res.json({ images: images.slice(0, 4) });
     } catch (e) {
-      console.error("[image-search] DDG error:", e);
+      console.error("[image-search] Gemini error:", e);
       res.json({ images: [] });
     }
   });
