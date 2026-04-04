@@ -1440,10 +1440,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Use Gemini 2.5 Flash with Google Search grounding via REST API (no SDK needed)
     try {
       const apiKey = process.env.GEMINI_API_KEY || "";
-      const prompt = `Find product images for: ${sku}
-List up to 4 direct image URLs (ending in .jpg, .jpeg, .png, or .webp) from manufacturer websites, retailers, or product databases.
-Return ONLY a JSON array of strings. Example: ["https://example.com/img.jpg"]
-Return [] if none found.`;
+      if (!apiKey) return res.json({ images: [] });
+
+      const prompt = `Search for product images of "${sku}".
+Find 4 different direct image URLs showing this product from online retailers, manufacturer sites, or product databases (e.g. Amazon, Newegg, manufacturer CDN).
+Each URL must point directly to an image file.
+Return your answer as a JSON array of URL strings, nothing else.
+Example: ["https://cdn.example.com/product1.jpg", "https://images.example.com/product2.png"]`;
 
       const geminiRes = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
@@ -1466,21 +1469,39 @@ Return [] if none found.`;
       // Grounding responses can have multiple parts; collect text from all of them
       const parts: any[] = geminiData?.candidates?.[0]?.content?.parts ?? [];
       const text: string = parts.filter((p: any) => p.text).map((p: any) => p.text).join("\n").trim();
-      console.log("[image-search] SKU:", sku, "| response:", text.substring(0, 400));
+      console.log("[image-search] SKU:", sku, "| response text:", text.substring(0, 500));
 
       // Try JSON array parse first (greedy match to capture full array)
       let images: string[] = [];
       const jsonMatch = text.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
-        try { images = JSON.parse(jsonMatch[0]).filter((u: any) => typeof u === "string"); } catch {}
+        try { images = JSON.parse(jsonMatch[0]).filter((u: any) => typeof u === "string" && u.startsWith("http")); } catch {}
       }
-      // Fallback: extract image URLs directly with regex
+
+      // Fallback: extract any image-like URLs from the text
       if (!images.length) {
-        const urlRe = /https?:\/\/[^\s"'<>\]]+\.(?:jpe?g|png|webp)(?:[?#][^\s"'<>]*)?/gi;
+        const urlRe = /https?:\/\/[^\s"'<>\]\)]+\.(?:jpe?g|png|webp)(?:[?#][^\s"'<>\]\)]*)?/gi;
         images = [...text.matchAll(urlRe)].map(m => m[0]);
       }
 
-      res.json({ images: images.slice(0, 4) });
+      // Additional fallback: extract image URLs from grounding metadata
+      if (images.length < 4) {
+        try {
+          const metadata = geminiData?.candidates?.[0]?.groundingMetadata;
+          const chunks: any[] = metadata?.groundingChunks ?? [];
+          for (const chunk of chunks) {
+            const uri = chunk?.web?.uri || "";
+            if (/\.(?:jpe?g|png|webp)(?:[?#]|$)/i.test(uri) && !images.includes(uri)) {
+              images.push(uri);
+            }
+          }
+        } catch {}
+      }
+
+      // Deduplicate and limit to 4
+      const unique = [...new Set(images)].slice(0, 4);
+      console.log("[image-search] SKU:", sku, "| found", unique.length, "images");
+      res.json({ images: unique });
     } catch (e) {
       console.error("[image-search] error:", e);
       res.json({ images: [] });
