@@ -227,14 +227,22 @@ export default function ProductListTable({
               {product.name}
             </div>
             {product.sku && (
-              <button
-                className="text-xs text-muted-foreground hover:text-primary hover:underline text-left"
-                onClick={() => openSkuImages(product.sku!, product.brand)}
-                title="Нажмите для поиска изображений"
-                data-testid={`text-sku-${product.id}`}
-              >
-                {product.sku}
-              </button>
+              isAuthenticated ? (
+                <a
+                  href={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent([product.brand, product.sku].filter(Boolean).join(" "))}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-muted-foreground hover:text-primary hover:underline text-left"
+                  title="Поиск изображений в Google"
+                  data-testid={`text-sku-${product.id}`}
+                >
+                  {product.sku}
+                </a>
+              ) : (
+                <span className="text-xs text-muted-foreground" data-testid={`text-sku-${product.id}`}>
+                  {product.sku}
+                </span>
+              )
             )}
             {product.brand && (
               <div className="text-xs text-muted-foreground" data-testid={`text-brand-${product.id}`}>

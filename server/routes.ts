@@ -685,24 +685,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Customer management routes (Admin Panel)
   app.get("/api/customers", isAdmin, async (req, res) => {
     try {
-      const allCustomers = await storage.getCustomers();
+      const [allCustomers, allStats] = await Promise.all([
+        storage.getCustomers(),
+        storage.getAllCustomerOrderStats(),
+      ]);
 
-      // Fetch order stats and update status for each customer
-      const customersWithStats = await Promise.all(
-        allCustomers.map(async (customer) => {
-          // Update customer status based on overdue payments
-          const updatedCustomer = await storage.updateCustomerStatusByDebt(customer.id);
-          
-          const stats = await storage.getCustomerOrderStats(customer.id);
-          const { password, ...customerWithoutPassword } = updatedCustomer;
-          return {
-            ...customerWithoutPassword,
-            totalOrders: stats.orderCount,
-            totalAmount: stats.totalOrderAmount,
-            overdueAmount: stats.overduePayments,
-          };
-        })
-      );
+      // Update statuses and attach stats in one pass (no extra DB calls per customer)
+      const customersWithStats = [];
+      for (const customer of allCustomers) {
+        let updatedCustomer = customer;
+
+        // Auto-update status based on overdue payments (same logic as updateCustomerStatusByDebt)
+        if (customer.status !== 'pending' && customer.status !== 'rejected' && customer.role !== 'admin') {
+          const stats = allStats.get(customer.id) ?? { orderCount: 0, totalOrderAmount: 0, overduePayments: 0 };
+          let newStatus = "approved";
+          if (stats.totalOrderAmount > 0) {
+            const overduePercentage = stats.overduePayments / stats.totalOrderAmount;
+            if (overduePercentage >= 0.5) {
+              newStatus = "paused";
+            } else if (stats.overduePayments > 0) {
+              newStatus = "limited";
+            }
+          }
+          if (customer.status !== newStatus) {
+            updatedCustomer = await storage.updateCustomer(customer.id, { status: newStatus as any });
+          }
+        }
+
+        const stats = allStats.get(customer.id) ?? { orderCount: 0, totalOrderAmount: 0, overduePayments: 0 };
+        const { password, ...customerWithoutPassword } = updatedCustomer;
+        customersWithStats.push({
+          ...customerWithoutPassword,
+          totalOrders: stats.orderCount,
+          totalAmount: stats.totalOrderAmount,
+          overdueAmount: stats.overduePayments,
+        });
+      }
 
       res.json(customersWithStats);
     } catch (error: any) {
@@ -861,7 +879,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Notify admin about new inquiry (fire-and-forget)
       storage.getCustomerById(req.session.customerId!).then(cust => {
         if (cust) sendAdminNewInquiryEmail(cust).catch(e => console.error('[EMAIL]', e));
-      }).catch(() => {});
+      }).catch(e => console.error('[EMAIL] inquiry notify:', e));
 
       res.json(inquiry);
     } catch (error: any) {
@@ -1026,10 +1044,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-      // All orders
-      const allOrders = await storage.getOrders();
-      const allCustomers = await storage.getCustomers();
+      // All orders + customers in parallel
+      const [allOrders, allCustomers] = await Promise.all([
+        storage.getOrders(),
+        storage.getCustomers(),
+      ]);
       const nonAdminCustomers = allCustomers.filter(c => c.role !== 'admin');
+
+      // Build customer lookup map (O(1) per lookup instead of O(N))
+      const customerMap = new Map(allCustomers.map(c => [c.id, c]));
 
       // Revenue this month vs last month
       const thisMonthOrders = allOrders.filter(o => o.createdAt && new Date(o.createdAt) >= startOfThisMonth);
@@ -1062,7 +1085,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Revenue by customer type
       const revenueByType: Record<string, number> = { дилер: 0, корпоративный: 0, 'гос. учреждение': 0 };
       for (const order of allOrders) {
-        const cust = allCustomers.find(c => c.id === order.customerId);
+        const cust = customerMap.get(order.customerId);
         if (cust) {
           const type = cust.customerType ?? 'дилер';
           revenueByType[type] = (revenueByType[type] ?? 0) + order.total;
@@ -1079,7 +1102,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .sort((a, b) => b[1] - a[1])
         .slice(0, 5)
         .map(([id, revenue]) => {
-          const cust = allCustomers.find(c => c.id === id);
+          const cust = customerMap.get(id);
           return { id, name: cust?.companyName ?? id, revenue };
         });
 

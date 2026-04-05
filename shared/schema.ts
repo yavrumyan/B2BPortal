@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -108,7 +109,10 @@ export const orders = pgTable("orders", {
   adminSeen: boolean("admin_seen").default(false).notNull(), // whether admin has viewed this order after creation
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("orders_customer_id_idx").on(table.customerId),
+  index("orders_customer_created_idx").on(table.customerId, table.createdAt),
+]);
 
 export const insertOrderSchema = createInsertSchema(orders).omit({
   id: true,
@@ -143,7 +147,9 @@ export const inquiries = pgTable("inquiries", {
   seen: boolean().default(false).notNull(), // whether customer has seen the inquiry updates
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("inquiries_customer_id_idx").on(table.customerId),
+]);
 
 export const insertInquirySchema = z.object({
   customerId: z.string(),
@@ -171,7 +177,9 @@ export const offers = pgTable("offers", {
   comment: text("comment"),
   seen: boolean().default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("offers_inquiry_id_idx").on(table.inquiryId),
+]);
 
 export const insertOfferSchema = createInsertSchema(offers).omit({
   id: true,
@@ -192,7 +200,9 @@ export const orderComments = pgTable("order_comments", {
   message: text("message").notNull(),
   isInternal: boolean("is_internal").default(false).notNull(), // only visible to admin
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("order_comments_order_id_idx").on(table.orderId),
+]);
 
 export type OrderComment = typeof orderComments.$inferSelect;
 export type InsertOrderComment = typeof orderComments.$inferInsert;

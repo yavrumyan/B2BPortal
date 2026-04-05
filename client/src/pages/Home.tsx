@@ -531,13 +531,13 @@ export default function Home() {
   const { data: orders = [], isLoading: ordersLoading } = useQuery<Order[]>({
     queryKey: ["/api/orders"],
     enabled: isAuthenticated && !isAdmin,
-    refetchInterval: 3000,
+    refetchInterval: 30_000,
   });
 
   const { data: inquiries = [] } = useQuery<any[]>({
     queryKey: ["/api/inquiries"],
     enabled: isAuthenticated && !isAdmin,
-    refetchInterval: 3000,
+    refetchInterval: 30_000,
   });
 
   interface CustomerWithStats extends Omit<Customer, 'password'> {

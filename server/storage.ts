@@ -146,28 +146,41 @@ export class DatabaseStorage implements IStorage {
     totalOrderAmount: number;
     overduePayments: number;
   }> {
-    const customerOrders = await this.getOrders(customerId);
-    const orderCount = customerOrders.length;
-    const totalOrderAmount = customerOrders.reduce((sum, order) => sum + order.total, 0);
+    const allStats = await this.getAllCustomerOrderStats();
+    return allStats.get(customerId) ?? { orderCount: 0, totalOrderAmount: 0, overduePayments: 0 };
+  }
 
-    // Calculate overdue payments
+  async getAllCustomerOrderStats(): Promise<Map<string, {
+    orderCount: number;
+    totalOrderAmount: number;
+    overduePayments: number;
+  }>> {
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
-    const overduePayments = customerOrders
-      .filter(order => {
-        const orderDate = new Date(order.createdAt!);
-        const isOverdue = orderDate < oneWeekAgo;
-        const isNotFullyPaid = order.paymentStatus === 'not_paid' || order.paymentStatus === 'partially_paid';
-        return isOverdue && isNotFullyPaid;
+    const rows = await db
+      .select({
+        customerId: orders.customerId,
+        orderCount: sql<number>`count(*)::int`,
+        totalOrderAmount: sql<number>`coalesce(sum(${orders.total}), 0)::int`,
+        overduePayments: sql<number>`coalesce(sum(
+          case when ${orders.createdAt} < ${oneWeekAgo}
+               and ${orders.paymentStatus} in ('not_paid', 'partially_paid')
+          then ${orders.total} else 0 end
+        ), 0)::int`,
       })
-      .reduce((sum, order) => sum + order.total, 0);
+      .from(orders)
+      .groupBy(orders.customerId);
 
-    return {
-      orderCount,
-      totalOrderAmount,
-      overduePayments,
-    };
+    const map = new Map<string, { orderCount: number; totalOrderAmount: number; overduePayments: number }>();
+    for (const row of rows) {
+      map.set(row.customerId, {
+        orderCount: row.orderCount,
+        totalOrderAmount: row.totalOrderAmount,
+        overduePayments: row.overduePayments,
+      });
+    }
+    return map;
   }
 
   async updateCustomer(id: string, updates: Partial<Omit<Customer, 'id' | 'createdAt'>>): Promise<Customer> {
@@ -269,23 +282,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertProduct(product: InsertProduct & { id?: string }): Promise<Product> {
-    // If ID is provided, update the existing product
     if (product.id) {
-      const existing = await db.select().from(products).where(eq(products.id, product.id));
-      
-      if (existing.length > 0) {
-        // Update existing product by ID
-        const { id, ...dataToUpdate } = product;
-        const [updated] = await db
-          .update(products)
-          .set({ ...dataToUpdate, updatedAt: new Date() })
-          .where(eq(products.id, id))
-          .returning();
-        return updated;
-      }
+      // Use ON CONFLICT for true upsert — 1 query instead of SELECT + UPDATE/INSERT
+      const { id, ...data } = product;
+      const [result] = await db
+        .insert(products)
+        .values({ ...data, id })
+        .onConflictDoUpdate({
+          target: products.id,
+          set: { ...data, updatedAt: new Date() },
+        })
+        .returning();
+      return result;
     }
-    
-    // Create new product if no ID provided or ID not found
+
+    // No ID provided — always insert new
     const { id, ...dataToInsert } = product;
     const [newProduct] = await db.insert(products).values(dataToInsert).returning();
     return newProduct;
@@ -623,25 +634,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUnreadOffersCountByCustomer(customerId: string): Promise<number> {
-    // Get all inquiries for this customer
-    const customerInquiries = await db
-      .select()
-      .from(inquiries)
-      .where(eq(inquiries.customerId, customerId));
-
-    if (customerInquiries.length === 0) {
-      return 0;
-    }
-
-    const inquiryIds = customerInquiries.map(inq => inq.id);
-
-    // Count unread offers for these inquiries
-    const unreadOffers = await db
-      .select()
+    const [result] = await db
+      .select({ count: sql<number>`count(*)::int` })
       .from(offers)
-      .where(sql`${offers.inquiryId} IN (${sql.join(inquiryIds, sql`, `)}) AND ${offers.seen} = false`);
-
-    return unreadOffers.length;
+      .innerJoin(inquiries, eq(offers.inquiryId, inquiries.id))
+      .where(and(
+        eq(inquiries.customerId, customerId),
+        eq(offers.seen, false),
+      ));
+    return result?.count ?? 0;
   }
   // Password reset operations
   async createPasswordResetToken(customerId: string): Promise<string> {
