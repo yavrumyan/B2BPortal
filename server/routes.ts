@@ -1433,67 +1433,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   // ──────────────────────────────────────────────────────────────────────────
 
-  app.get("/api/image-search", isAuthenticated, async (req, res) => {
-    const sku = ((req.query.sku as string) || "").trim();
-    if (!sku) return res.status(400).json({ message: "SKU required" });
-
-    // Gemini 2.0 Flash with Google Search grounding — fast (~1-2s), no thinking overhead
-    try {
-      const apiKey = process.env.GEMINI_API_KEY || "";
-      if (!apiKey) return res.json({ images: [] });
-
-      const prompt = `Find 4 product images for: "${sku}"
-Search retailer sites (Amazon, Newegg, B&H Photo, manufacturer sites) for this exact product.
-Return ONLY a JSON array of 4 direct image URLs (jpg/png/webp). No explanation.
-Example: ["https://m.media-amazon.com/images/I/example.jpg"]
-If not found return []`;
-
-      const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            tools: [{ googleSearch: {} }],
-          }),
-        }
-      );
-      const geminiData = await geminiRes.json() as any;
-
-      if (!geminiRes.ok) {
-        console.error("[image-search] Gemini error:", JSON.stringify(geminiData).substring(0, 500));
-        return res.json({ images: [] });
-      }
-
-      // Collect text from all parts (grounding may split across parts)
-      const parts: any[] = geminiData?.candidates?.[0]?.content?.parts ?? [];
-      const text: string = parts.filter((p: any) => p.text).map((p: any) => p.text).join("\n").trim();
-      console.log("[image-search] SKU:", sku, "| response:", text.substring(0, 400));
-
-      let images: string[] = [];
-
-      // Try JSON array parse
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        try { images = JSON.parse(jsonMatch[0]).filter((u: any) => typeof u === "string" && u.startsWith("http")); } catch {}
-      }
-
-      // Fallback: extract image URLs with regex
-      if (!images.length) {
-        const urlRe = /https?:\/\/[^\s"'<>\]\)]+\.(?:jpe?g|png|webp)(?:[?#][^\s"'<>\]\)]*)?/gi;
-        images = [...text.matchAll(urlRe)].map(m => m[0]);
-      }
-
-      const unique = [...new Set(images)].slice(0, 4);
-      console.log("[image-search] SKU:", sku, "| found", unique.length, "images");
-      res.json({ images: unique });
-    } catch (e) {
-      console.error("[image-search] error:", e);
-      res.json({ images: [] });
-    }
-  });
-
   const httpServer = createServer(app);
   return httpServer;
 }
