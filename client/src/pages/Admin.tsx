@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { exportProductsToCSV, importProductsFromCSV } from "@/lib/csvUtils";
+import { useLanguage } from "@/contexts/LanguageContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -63,6 +64,7 @@ export default function Admin() {
   const { isAdmin, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const { play: playNotificationSound } = useNotificationSound();
   const prevCountsRef = useRef({ orders: 0, inquiries: 0 });
 
@@ -89,8 +91,8 @@ export default function Admin() {
   useEffect(() => {
     if (!authLoading && !isAdmin) {
       toast({
-        title: "Доступ запрещен",
-        description: "У вас нет прав администратора",
+        title: t("admin.accessDenied"),
+        description: t("admin.noAdminRights"),
         variant: "destructive",
       });
       setLocation("/");
@@ -161,14 +163,14 @@ export default function Admin() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
       toast({
-        title: "Заявка одобрена",
-        description: "Заявка успешно одобрена",
+        title: t("admin.approved"),
+        description: t("admin.approvedDesc"),
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Ошибка",
-        description: error.message || "Не удалось одобрить заявку",
+        title: t("common.error"),
+        description: error.message || t("admin.approveError"),
         variant: "destructive",
       });
     },
@@ -182,14 +184,14 @@ export default function Admin() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
       toast({
-        title: "Заявка отклонена",
-        description: "Заявка успешно отклонена",
+        title: t("admin.declined"),
+        description: t("admin.declinedDesc"),
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Ошибка",
-        description: error.message || "Не удалось отклонить заявку",
+        title: t("common.error"),
+        description: error.message || t("admin.declineError"),
         variant: "destructive",
       });
     },
@@ -204,14 +206,14 @@ export default function Admin() {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       setShowProductForm(false);
       toast({
-        title: "Товар добавлен",
-        description: "Товар успешно добавлен",
+        title: t("admin.productAdded"),
+        description: t("admin.productAddedDesc"),
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Ошибка",
-        description: error.message || "Не удалось добавить товар",
+        title: t("common.error"),
+        description: error.message || t("admin.productAddError"),
         variant: "destructive",
       });
     },
@@ -225,14 +227,14 @@ export default function Admin() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       toast({
-        title: "Товар удален",
-        description: "Товар успешно удален",
+        title: t("admin.productDeleted"),
+        description: t("admin.productDeletedDesc"),
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Ошибка",
-        description: error.message || "Не удалось удалить товар",
+        title: t("common.error"),
+        description: error.message || t("admin.productDeleteError"),
         variant: "destructive",
       });
     },
@@ -254,14 +256,14 @@ export default function Admin() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] }); // Invalidate customers
       toast({
-        title: "Клиент обновлен",
-        description: "Изменения успешно сохранены",
+        title: t("admin.clientUpdated"),
+        description: t("admin.clientUpdatedDesc"),
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Ошибка",
-        description: error.message || "Не удалось обновить клиента",
+        title: t("common.error"),
+        description: error.message || t("admin.clientUpdateError"),
         variant: "destructive",
       });
     },
@@ -280,14 +282,14 @@ export default function Admin() {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
       toast({
-        title: "Клиент удален",
-        description: "Клиент и все его заказы успешно удалены",
+        title: t("admin.clientDeleted"),
+        description: t("admin.clientDeletedDesc"),
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Ошибка",
-        description: error.message || "Не удалось удалить клиента",
+        title: t("common.error"),
+        description: error.message || t("admin.clientDeleteError"),
         variant: "destructive",
       });
     },
@@ -305,14 +307,14 @@ export default function Admin() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       toast({
-        title: "Товар обновлен",
-        description: "Изменения успешно сохранены",
+        title: t("admin.productUpdated"),
+        description: t("admin.productUpdatedDesc"),
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Ошибка",
-        description: error.message || "Не удалось обновить товар",
+        title: t("common.error"),
+        description: error.message || t("admin.productUpdateError"),
         variant: "destructive",
       });
     },
@@ -323,7 +325,7 @@ export default function Admin() {
   };
 
   const handleDeleteProduct = (id: string) => {
-    if (confirm("Вы уверены, что хотите удалить этот товар?")) {
+    if (confirm(t("admin.confirmDeleteProduct"))) {
       deleteProductMutation.mutate(id);
     }
   };
@@ -336,14 +338,14 @@ export default function Admin() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       toast({
-        title: "Товары импортированы",
-        description: "Товары успешно добавлены в базу данных",
+        title: t("admin.imported"),
+        description: t("admin.importedDesc"),
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Ошибка импорта",
-        description: error.message || "Не удалось импортировать товары",
+        title: t("admin.importError"),
+        description: error.message || t("admin.importError"),
         variant: "destructive",
       });
     },
@@ -362,8 +364,8 @@ export default function Admin() {
       bulkImportMutation.mutate(importedProducts);
     } catch (error: any) {
       toast({
-        title: "Ошибка чтения файла",
-        description: error.message || "Не удалось прочитать CSV файл",
+        title: t("admin.fileReadError"),
+        description: error.message || t("admin.fileReadError"),
         variant: "destructive",
       });
     }
@@ -380,14 +382,14 @@ export default function Admin() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
       toast({
-        title: "Заказ удален",
-        description: "Заказ успешно удален",
+        title: t("admin.orderDeleted"),
+        description: t("admin.orderDeletedDesc"),
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Ошибка",
-        description: error.message || "Не удалось удалить заказ",
+        title: t("common.error"),
+        description: error.message || t("admin.orderDeleteError"),
         variant: "destructive",
       });
     },
@@ -395,7 +397,7 @@ export default function Admin() {
 
   const handleDeleteOrder = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm("Вы уверены, что хотите удалить этот заказ? Это действие нельзя отменить.")) {
+    if (confirm(t("admin.confirmDeleteOrder"))) {
       deleteOrderMutation.mutate(id);
     }
   };
@@ -433,12 +435,12 @@ export default function Admin() {
             <Menu className="h-5 w-5" />
           </Button>
           <h1 className="text-xl md:text-2xl font-bold">
-            {activeSection === "dashboard" && "Дашборд"}
-            {activeSection === "products" && "Управление товарами"}
-            {activeSection === "registrations" && "Список клиентов"}
-            {activeSection === "orders" && "Заказы"}
-            {activeSection === "inquiries" && "Запросы"}
-            {activeSection === "settings" && "Настройки"}
+            {activeSection === "dashboard" && t("admin.sidebar.dashboard")}
+            {activeSection === "products" && t("admin.sidebar.products")}
+            {activeSection === "registrations" && t("admin.sidebar.clients")}
+            {activeSection === "orders" && t("admin.sidebar.orders")}
+            {activeSection === "inquiries" && t("admin.sidebar.inquiries")}
+            {activeSection === "settings" && t("admin.sidebar.settings")}
           </h1>
         </header>
 
@@ -455,7 +457,7 @@ export default function Admin() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <Card>
                       <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Выручка (месяц)</CardTitle>
+                        <CardTitle className="text-sm font-medium text-muted-foreground">{t("admin.revenue")}</CardTitle>
                         <DollarSign className="h-4 w-4 text-muted-foreground" />
                       </CardHeader>
                       <CardContent>
@@ -468,8 +470,8 @@ export default function Admin() {
                           )}
                           <span className={analytics.revenueThisMonth >= analytics.revenueLastMonth ? "text-green-600" : "text-red-500"}>
                             {analytics.revenueLastMonth > 0
-                              ? `${Math.abs(Math.round((analytics.revenueThisMonth - analytics.revenueLastMonth) / analytics.revenueLastMonth * 100))}% vs прошлый месяц`
-                              : "Нет данных за прошлый месяц"}
+                              ? `${Math.abs(Math.round((analytics.revenueThisMonth - analytics.revenueLastMonth) / analytics.revenueLastMonth * 100))}${t("admin.vsLastMonth")}`
+                              : t("admin.noLastMonthData")}
                           </span>
                         </div>
                       </CardContent>
@@ -477,34 +479,34 @@ export default function Admin() {
 
                     <Card>
                       <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Всего заказов</CardTitle>
+                        <CardTitle className="text-sm font-medium text-muted-foreground">{t("admin.totalOrders")}</CardTitle>
                         <ShoppingBag className="h-4 w-4 text-muted-foreground" />
                       </CardHeader>
                       <CardContent>
                         <div className="text-2xl font-bold">{analytics.totalOrders}</div>
-                        <div className="text-xs text-muted-foreground mt-1">За всё время</div>
+                        <div className="text-xs text-muted-foreground mt-1">{t("admin.allTime")}</div>
                       </CardContent>
                     </Card>
 
                     <Card>
                       <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Клиентов</CardTitle>
+                        <CardTitle className="text-sm font-medium text-muted-foreground">{t("admin.clients")}</CardTitle>
                         <Users className="h-4 w-4 text-muted-foreground" />
                       </CardHeader>
                       <CardContent>
                         <div className="text-2xl font-bold">{analytics.totalCustomers}</div>
-                        <div className="text-xs text-muted-foreground mt-1">Зарегистрировано</div>
+                        <div className="text-xs text-muted-foreground mt-1">{t("admin.registered")}</div>
                       </CardContent>
                     </Card>
 
                     <Card>
                       <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Задолженность</CardTitle>
+                        <CardTitle className="text-sm font-medium text-muted-foreground">{t("admin.debt")}</CardTitle>
                         <AlertCircle className="h-4 w-4 text-red-500" />
                       </CardHeader>
                       <CardContent>
                         <div className="text-2xl font-bold text-red-600">{analytics.overdueTotal.toLocaleString('ru-RU')} ֏</div>
-                        <div className="text-xs text-muted-foreground mt-1">Просрочено (&gt;7 дней)</div>
+                        <div className="text-xs text-muted-foreground mt-1">{t("admin.overdue")}</div>
                       </CardContent>
                     </Card>
                   </div>
@@ -513,7 +515,7 @@ export default function Admin() {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-base">Заказы за 30 дней</CardTitle>
+                        <CardTitle className="text-base">{t("admin.ordersLast30")}</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <ResponsiveContainer width="100%" height={220}>
@@ -522,7 +524,7 @@ export default function Admin() {
                             <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
                             <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
                             <Tooltip
-                              formatter={(value: any) => [value, 'Заказов']}
+                              formatter={(value: any) => [value, t("admin.ordersLabel")]}
                               labelFormatter={(l) => `Дата: ${l}`}
                             />
                             <Line type="monotone" dataKey="orders" stroke="#1d4ed8" strokeWidth={2} dot={false} />
@@ -533,7 +535,7 @@ export default function Admin() {
 
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-base">Выручка по типу клиента</CardTitle>
+                        <CardTitle className="text-base">{t("admin.revenueByType")}</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <ResponsiveContainer width="100%" height={220}>
@@ -564,7 +566,7 @@ export default function Admin() {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-base">Топ-5 клиентов по выручке</CardTitle>
+                        <CardTitle className="text-base">{t("admin.top5Clients")}</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <ResponsiveContainer width="100%" height={200}>
@@ -581,7 +583,7 @@ export default function Admin() {
 
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-base">Топ-5 категорий по выручке</CardTitle>
+                        <CardTitle className="text-base">{t("admin.top5Categories")}</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <ResponsiveContainer width="100%" height={200}>
@@ -793,7 +795,7 @@ export default function Admin() {
                       <CardContent className="p-4">
                         <div className="flex justify-between items-start gap-4">
                           <div className="space-y-1 flex-1">
-                            <div className="font-medium">Заказ #{order.orderNumber}</div>
+                            <div className="font-medium">{t("orderDetail.title")} #{order.orderNumber}</div>
                             <div className="text-sm text-muted-foreground">
                               {customer?.companyName || "Unknown Customer"}
                             </div>
@@ -815,13 +817,13 @@ export default function Admin() {
                                 variant={order.paymentStatus === "paid" ? "default" : order.paymentStatus === "partially_paid" ? "secondary" : "destructive"}
                                 className={order.paymentStatus === "paid" ? "bg-green-600 text-white" : order.paymentStatus === "partially_paid" ? "bg-blue-600 text-white" : "bg-red-600 text-white"}
                               >
-                                {order.paymentStatus === "paid" ? "Оплачен" : order.paymentStatus === "partially_paid" ? "Частично оплачен" : "Не оплачен"}
+                                {order.paymentStatus === "paid" ? t("orders.paid") : order.paymentStatus === "partially_paid" ? t("orders.partiallyPaid") : t("orders.unpaid")}
                               </Badge>
                               <Badge 
                                 variant={order.deliveryStatus === "delivered" ? "default" : order.deliveryStatus === "transit" ? "secondary" : "outline"}
                                 className={order.deliveryStatus === "delivered" ? "bg-green-600 text-white" : order.deliveryStatus === "transit" ? "bg-orange-500 text-white" : order.deliveryStatus === "confirmed" ? "bg-blue-600 text-white" : "bg-gray-700 text-white"}
                               >
-                                {order.deliveryStatus === "delivered" ? "Доставлен" : order.deliveryStatus === "transit" ? "В пути" : order.deliveryStatus === "confirmed" ? "Подтвержден" : "Принят"}
+                                {order.deliveryStatus === "delivered" ? t("orders.delivered") : order.deliveryStatus === "transit" ? t("orders.inTransit") : order.deliveryStatus === "confirmed" ? t("orders.confirmed") : t("orders.accepted")}
                               </Badge>
                             </div>
                           </div>

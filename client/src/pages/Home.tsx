@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronDown, ChevronUp, X, ShoppingCart, ImagePlus, Menu, Check } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const categories = [
   "Ноутбуки", "Компьютеры", "Серверы", "Телефоны", "Планшеты",
@@ -37,6 +38,7 @@ function CustomerInquiriesSection({
   onAddToCart?: (item: CartItem) => void;
   cartItems?: CartItem[];
 }) {
+  const { t } = useLanguage();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -55,7 +57,7 @@ function CustomerInquiriesSection({
       return await apiRequest("POST", "/api/inquiries", data);
     },
     onSuccess: () => {
-      toast({ title: "Запрос отправлен успешно!" });
+      toast({ title: t("inquiries.sentSuccess") });
       queryClient.invalidateQueries({ queryKey: ["/api/inquiries"] });
       setShowForm(true);
       setFormData({
@@ -65,8 +67,8 @@ function CustomerInquiriesSection({
     },
     onError: (error: any) => {
       toast({
-        title: "Ошибка",
-        description: error.message || "Не удалось отправить запрос",
+        title: t("common.error"),
+        description: error.message || t("inquiries.sendError"),
         variant: "destructive",
       });
     },
@@ -87,8 +89,8 @@ function CustomerInquiriesSection({
     for (let product of formData.productsRequested) {
       if (!product.description) {
         toast({
-          title: "Ошибка",
-          description: "Пожалуйста, заполните описание для каждого товара",
+          title: t("common.error"),
+          description: t("inquiries.fillDescription"),
           variant: "destructive",
         });
         return;
@@ -123,19 +125,19 @@ function CustomerInquiriesSection({
 
   return (
     <div className="space-y-4 max-w-4xl">
-      <h1 className="text-3xl font-bold">Мои запросы</h1>
-      
+      <h1 className="text-3xl font-bold">{t("inquiries.title")}</h1>
+
       {showForm && (
         <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Отправить новый запрос</h2>
+          <h2 className="text-xl font-semibold mb-4">{t("inquiries.submitNew")}</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-4">
-              <label className="text-sm font-medium">Товары</label>
+              <label className="text-sm font-medium">{t("inquiries.products")}</label>
               {formData.productsRequested.map((product, idx) => (
                 <div key={idx} className="space-y-2 border p-3 rounded">
                   <div className="flex gap-2 items-end">
                     <div className="flex-1">
-                      <label className="text-sm font-medium">Категория товара (не обязательно)</label>
+                      <label className="text-sm font-medium">{t("inquiries.categoryOptional")}</label>
                       <select 
                         value={product.category} 
                         onChange={(e) => {
@@ -145,7 +147,7 @@ function CustomerInquiriesSection({
                         }}
                         className="border rounded-md px-3 py-2 w-full text-sm"
                       >
-                        <option value="">Выберите категорию...</option>
+                        <option value="">{t("inquiries.selectCategory")}</option>
                         {categories.map(cat => (
                           <option key={cat} value={cat}>{cat}</option>
                         ))}
@@ -177,7 +179,7 @@ function CustomerInquiriesSection({
                           ? <Check className="h-4 w-4 mr-2" />
                           : <ImagePlus className="h-4 w-4 mr-2" />
                         }
-                        Фото
+                        {t("inquiries.photo")}
                       </Button>
                       {product.image && (
                         <div className="flex items-center gap-1 text-xs text-green-700 max-w-[120px]">
@@ -220,12 +222,12 @@ function CustomerInquiriesSection({
                         newProducts[idx].description = e.target.value;
                         setFormData({...formData, productsRequested: newProducts});
                       }}
-                      placeholder="Описание товара* /обязательно/"
+                      placeholder={t("inquiries.descriptionPlaceholder")}
                       className="text-sm flex-1"
                       rows={3}
                     />
                     <div className="flex flex-col justify-between">
-                      <label className="text-sm font-medium">Кол-во</label>
+                      <label className="text-sm font-medium">{t("inquiries.qty")}</label>
                       <Input
                         type="number"
                         value={product.quantity}
@@ -234,7 +236,7 @@ function CustomerInquiriesSection({
                           newProducts[idx].quantity = Number(e.target.value);
                           setFormData({...formData, productsRequested: newProducts});
                         }}
-                        placeholder="Количество"
+                        placeholder={t("inquiries.qtyPlaceholder")}
                         className="w-20 text-sm"
                       />
                     </div>
@@ -250,12 +252,12 @@ function CustomerInquiriesSection({
                 })}
                 className="text-sm"
               >
-                + Добавить товар
+                {t("inquiries.addProduct")}
               </Button>
             </div>
 
             <div>
-              <label className="text-sm font-medium">Срок ответа (опционально)</label>
+              <label className="text-sm font-medium">{t("inquiries.deadline")}</label>
               <Input 
                 type="date" 
                 value={formData.deadline}
@@ -265,19 +267,19 @@ function CustomerInquiriesSection({
             </div>
 
             <Button type="submit" disabled={createInquiryMutation.isPending} className="w-full bg-blue-600 hover:bg-blue-700">
-              Отправить запрос
+              {t("inquiries.submit")}
             </Button>
           </form>
         </Card>
       )}
       
       <Button variant="outline" onClick={() => setShowForm(!showForm)} className="text-sm">
-        {showForm ? "Скрыть форму" : "Показать форму"}
+        {showForm ? t("inquiries.hideForm") : t("inquiries.showForm")}
       </Button>
 
       <div className="space-y-2">
         {inquiries.length === 0 ? (
-          <Card className="p-4 text-center text-gray-500 text-sm">Нет запросов</Card>
+          <Card className="p-4 text-center text-gray-500 text-sm">{t("inquiries.noInquiries")}</Card>
         ) : (
           inquiries.map((inquiry: any) => (
             <Card key={inquiry.id} className="p-0 overflow-hidden cursor-default hover:shadow-sm transition-shadow">
@@ -296,7 +298,13 @@ function CustomerInquiriesSection({
                 }}
               >
                 <div className="flex items-center gap-3 flex-1">
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(inquiry.status)}`}>{inquiry.status}</span>
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(inquiry.status)}`}>{
+                    inquiry.status === "Отправлено" ? t("inquiries.statusSent") :
+                    inquiry.status === "Получено предложение" ? t("inquiries.statusOfferReceived") :
+                    inquiry.status === "Заказано" ? t("inquiries.statusOrdered") :
+                    inquiry.status === "Нет предложения" ? t("inquiries.statusNoOffer") :
+                    inquiry.status
+                  }</span>
                   <span className="text-xs text-gray-500">
                     {new Date(inquiry.createdAt).toLocaleDateString("ru-RU")}
                   </span>
@@ -306,13 +314,13 @@ function CustomerInquiriesSection({
               {expandedId === inquiry.id && (
                 <div className="p-3 pt-0 space-y-3 text-sm">
                   <div className="border-t pt-3">
-                    <p className="text-xs font-semibold text-gray-600 mb-2">Запрашиваемые товары:</p>
+                    <p className="text-xs font-semibold text-gray-600 mb-2">{t("inquiries.requestedProducts")}</p>
                     <div className="space-y-2">
                       {inquiry.productsRequested?.map((product: any, idx: number) => (
                         <div key={idx} className="border rounded p-2 bg-gray-50">
                           <div className="font-medium text-xs text-gray-700">{product.category}</div>
                           <div className="text-xs text-gray-600 mt-1">{product.description}</div>
-                          <div className="text-xs text-gray-500 mt-1">Кол-во: {product.quantity}</div>
+                          <div className="text-xs text-gray-500 mt-1">{t("inquiries.qty")}: {product.quantity}</div>
                         </div>
                       ))}
                     </div>
@@ -320,24 +328,24 @@ function CustomerInquiriesSection({
                   
                   {inquiry.deadline && (
                     <div>
-                      <p className="text-xs font-semibold text-gray-600">Срок ответа:</p>
+                      <p className="text-xs font-semibold text-gray-600">{t("inquiries.responseDeadline")}</p>
                       <p className="text-xs text-gray-600">{new Date(inquiry.deadline).toLocaleDateString("ru-RU")}</p>
                     </div>
                   )}
 
                   {inquiry.offers && inquiry.offers.length > 0 && (
                     <div>
-                      <h4 className="font-semibold text-xs mb-2">Полученные предложения:</h4>
+                      <h4 className="font-semibold text-xs mb-2">{t("inquiries.receivedOffers")}</h4>
                       <div className="space-y-2">
                         {inquiry.offers.map((offer: any) => (
                           <Card key={offer.id} className="p-2 bg-blue-50 border-blue-200">
                             <div className="flex justify-between items-start gap-2">
                               <div className="flex-1">
                                 <div className="text-xs font-medium">{offer.productName}</div>
-                                <div className="text-xs text-gray-600 mt-1">Цена: {offer.price} AMD {offer.quantity && `(Кол-во: ${offer.quantity})`}</div>
-                                <div className="text-xs text-gray-600">Доставка: {offer.deliveryTime}</div>
+                                <div className="text-xs text-gray-600 mt-1">{t("inquiries.offerPrice")} {offer.price} AMD {offer.quantity && `(${t("inquiries.offerQty")} ${offer.quantity})`}</div>
+                                <div className="text-xs text-gray-600">{t("inquiries.offerDelivery")} {offer.deliveryTime}</div>
                                 {offer.comment && (
-                                  <div className="text-xs text-gray-600 mt-1">Комментарий: {offer.comment}</div>
+                                  <div className="text-xs text-gray-600 mt-1">{t("inquiries.offerComment")} {offer.comment}</div>
                                 )}
                               </div>
                               <Button
@@ -351,7 +359,7 @@ function CustomerInquiriesSection({
                                       quantity: offer.quantity || 1,
                                       price: offer.price,
                                     });
-                                    toast({ title: "Товар добавлен в корзину" });
+                                    toast({ title: t("inquiries.addedToCart") });
                                   }
                                 }}
                                 className="bg-green-600 hover:bg-green-700"
@@ -391,6 +399,7 @@ export default function Home() {
   const { isAuthenticated, isAdmin, customer } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const queryClient = useQueryClient();
   const [profileData, setProfileData] = useState({
     companyName: "",
@@ -475,8 +484,8 @@ export default function Home() {
     sessionStorage.removeItem("pendingSharedCart");
     fetch(`/api/sc/${pendingId}`, { credentials: "include" })
       .then(async (res) => {
-        if (res.status === 410) { toast({ title: "Ссылка устарела", description: "Срок действия этой ссылки на корзину истёк.", variant: "destructive" }); return; }
-        if (!res.ok) { toast({ title: "Ссылка не найдена", variant: "destructive" }); return; }
+        if (res.status === 410) { toast({ title: t("home.linkExpired"), description: t("home.linkExpiredDesc"), variant: "destructive" }); return; }
+        if (!res.ok) { toast({ title: t("home.linkNotFound"), variant: "destructive" }); return; }
         const data = await res.json() as { name: string; items: Array<{ productId: string; quantity: number; product: any }>; skippedCount: number };
 
         let newCart = [...cartItems];
@@ -498,12 +507,12 @@ export default function Home() {
 
         const skipped = data.skippedCount;
         toast({
-          title: `${addedCount} товаров добавлено в корзину`,
-          description: skipped > 0 ? `${skipped} товаров недоступны и не добавлены.` : undefined,
+          title: `${addedCount} ${t("home.itemsAdded")}`,
+          description: skipped > 0 ? `${skipped} ${t("home.itemsUnavailable")}` : undefined,
         });
         setIsCartOpen(true);
       })
-      .catch(() => toast({ title: "Ошибка загрузки корзины", variant: "destructive" }));
+      .catch(() => toast({ title: t("home.cartLoadError"), variant: "destructive" }));
   }, [isAuthenticated, isAdmin, products]);
 
   const filteredProductIds = useMemo(() => {
@@ -622,8 +631,8 @@ export default function Home() {
     },
     onSuccess: () => {
       toast({
-        title: "Данные обновлены",
-        description: "Ваши данные успешно сохранены",
+        title: t("profile.updated"),
+        description: t("profile.updatedDesc"),
       });
       setProfileEdited(false);
       // Refresh customer data without full page reload
@@ -632,8 +641,8 @@ export default function Home() {
     },
     onError: (error: any) => {
       toast({
-        title: "Ошибка",
-        description: error.message || "Не удалось обновить данные",
+        title: t("common.error"),
+        description: error.message || t("profile.updateError"),
         variant: "destructive",
       });
     },
@@ -699,8 +708,8 @@ export default function Home() {
 
     setIsCartOpen(true);
     toast({
-      title: "Добавлено в корзину",
-      description: `${product.name} (${quantity} шт.)`,
+      title: t("home.addedToCart"),
+      description: `${product.name} (${quantity} ${t("product.pcs")})`,
     });
   };
 
@@ -758,8 +767,8 @@ export default function Home() {
         queryClient.invalidateQueries({ queryKey: ["/api/customers", customer.id, "stats"] });
       }
       toast({
-        title: "Заказ оформлен",
-        description: "Ваш заказ успешно отправлен. Мы свяжемся с вами в ближайшее время.",
+        title: t("home.orderPlaced"),
+        description: t("home.orderPlacedDesc"),
       });
 
       // Clear cart from backend
@@ -776,8 +785,8 @@ export default function Home() {
     },
     onError: (error: any) => {
       toast({
-        title: "Ошибка",
-        description: error.message || "Не удалось оформить заказ",
+        title: t("common.error"),
+        description: error.message || t("home.orderError"),
         variant: "destructive",
       });
     },
@@ -787,8 +796,8 @@ export default function Home() {
     if (!isAuthenticated) {
       setIsCartOpen(false);
       toast({
-        title: "Требуется авторизация",
-        description: "Пожалуйста, войдите в систему для оформления заказа",
+        title: t("home.authRequired"),
+        description: t("home.authRequiredDesc"),
         variant: "destructive",
       });
       setLocation("/login");
@@ -843,7 +852,7 @@ export default function Home() {
         <main className="flex-1 px-4 py-6 max-w-full overflow-x-hidden">
           {isAuthenticated && !isAdmin && activeSection === "orders" && (
             <div className="mb-8">
-              <h2 className="mb-4 text-2xl font-bold">Мои заказы</h2>
+              <h2 className="mb-4 text-2xl font-bold">{t("orders.title")}</h2>
               {ordersLoading ? (
                 <div className="space-y-4">
                   {[...Array(3)].map((_, i) => (
@@ -851,7 +860,7 @@ export default function Home() {
                   ))}
                 </div>
               ) : orders.length === 0 ? (
-                <p className="text-muted-foreground">У вас пока нет заказов</p>
+                <p className="text-muted-foreground">{t("orders.noOrders")}</p>
               ) : (
                 <div className="grid gap-4">
                   {orders.map((order) => (
@@ -873,7 +882,7 @@ export default function Home() {
                       <CardContent className="p-4">
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
-                            <div className="font-medium">Заказ #{order.orderNumber}</div>
+                            <div className="font-medium">{t("orders.orderNumber")} #{order.orderNumber}</div>
                             <div className="text-sm text-muted-foreground">
                               {new Date(order.createdAt!).toLocaleDateString("ru-RU")}
                             </div>
@@ -892,13 +901,13 @@ export default function Home() {
                                 variant={order.paymentStatus === "paid" ? "default" : order.paymentStatus === "partially_paid" ? "secondary" : "destructive"}
                                 className={order.paymentStatus === "paid" ? "bg-green-600 text-white" : order.paymentStatus === "partially_paid" ? "bg-blue-600 text-white" : "bg-red-600 text-white"}
                               >
-                                {order.paymentStatus === "paid" ? "Оплачен" : order.paymentStatus === "partially_paid" ? "Частично оплачен" : "Не оплачен"}
+                                {order.paymentStatus === "paid" ? t("orders.paid") : order.paymentStatus === "partially_paid" ? t("orders.partiallyPaid") : t("orders.unpaid")}
                               </Badge>
                               <Badge 
                                 variant={order.deliveryStatus === "delivered" ? "default" : order.deliveryStatus === "transit" ? "secondary" : "outline"}
                                 className={order.deliveryStatus === "delivered" ? "bg-green-600 text-white" : order.deliveryStatus === "transit" ? "bg-orange-500 text-white" : order.deliveryStatus === "confirmed" ? "bg-blue-600 text-white" : "bg-gray-700 text-white"}
                               >
-                                {order.deliveryStatus === "delivered" ? "Доставлен" : order.deliveryStatus === "transit" ? "В пути" : order.deliveryStatus === "confirmed" ? "Подтвержден" : "Принят"}
+                                {order.deliveryStatus === "delivered" ? t("orders.delivered") : order.deliveryStatus === "transit" ? t("orders.inTransit") : order.deliveryStatus === "confirmed" ? t("orders.confirmed") : t("orders.accepted")}
                               </Badge>
                             </div>
                           </div>
@@ -917,21 +926,21 @@ export default function Home() {
           {isAuthenticated && !isAdmin && activeSection === "profile" && customer && (
             <div className="mb-8">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold">Мои данные</h2>
+                <h2 className="text-2xl font-bold">{t("profile.title")}</h2>
                 {profileEdited && (
                   <Button onClick={handleSaveProfile} variant="default">
-                    Сохранить изменения
+                    {t("profile.saveChanges")}
                   </Button>
                 )}
               </div>
               <div className="grid gap-6 md:grid-cols-2">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Информация о компании</CardTitle>
+                    <CardTitle>{t("profile.companyInfo")}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground w-40">Название компании:</span>
+                      <span className="text-sm text-muted-foreground w-40">{t("profile.companyName")}</span>
                       <Input
                         value={profileData.companyName}
                         onChange={(e) => setProfileData({ ...profileData, companyName: e.target.value })}
@@ -939,7 +948,7 @@ export default function Home() {
                       />
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground w-40">ИНН:</span>
+                      <span className="text-sm text-muted-foreground w-40">{t("profile.taxId")}</span>
                       <Input
                         value={profileData.taxId}
                         onChange={(e) => setProfileData({ ...profileData, taxId: e.target.value })}
@@ -947,7 +956,7 @@ export default function Home() {
                       />
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground w-40">Адрес доставки:</span>
+                      <span className="text-sm text-muted-foreground w-40">{t("profile.deliveryAddress")}</span>
                       <Input
                         value={profileData.deliveryAddress}
                         onChange={(e) => setProfileData({ ...profileData, deliveryAddress: e.target.value })}
@@ -955,7 +964,7 @@ export default function Home() {
                       />
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground w-40">Банк:</span>
+                      <span className="text-sm text-muted-foreground w-40">{t("profile.bank")}</span>
                       <Input
                         value={profileData.bankName}
                         onChange={(e) => setProfileData({ ...profileData, bankName: e.target.value })}
@@ -963,7 +972,7 @@ export default function Home() {
                       />
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground w-40">Банковский счет:</span>
+                      <span className="text-sm text-muted-foreground w-40">{t("profile.bankAccount")}</span>
                       <Input
                         value={profileData.bankAccount}
                         onChange={(e) => setProfileData({ ...profileData, bankAccount: e.target.value })}
@@ -975,11 +984,11 @@ export default function Home() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Контактная информация</CardTitle>
+                    <CardTitle>{t("profile.contactInfo")}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground w-40">Представитель:</span>
+                      <span className="text-sm text-muted-foreground w-40">{t("profile.representative")}</span>
                       <Input
                         value={profileData.representativeName}
                         onChange={(e) => setProfileData({ ...profileData, representativeName: e.target.value })}
@@ -995,7 +1004,7 @@ export default function Home() {
                       />
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground w-40">Телефон:</span>
+                      <span className="text-sm text-muted-foreground w-40">{t("profile.phone")}</span>
                       <Input
                         value={profileData.phone}
                         onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
@@ -1003,7 +1012,7 @@ export default function Home() {
                       />
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground w-40">Мессенджер:</span>
+                      <span className="text-sm text-muted-foreground w-40">{t("profile.messenger")}</span>
                       <Select
                         value={profileData.messenger}
                         onValueChange={(value) => setProfileData({ ...profileData, messenger: value as "telegram" | "whatsapp" | "viber" })}
@@ -1019,7 +1028,7 @@ export default function Home() {
                       </Select>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground w-40">Контакт в мессенджере:</span>
+                      <span className="text-sm text-muted-foreground w-40">{t("profile.messengerContact")}</span>
                       <Input
                         value={profileData.messengerContact}
                         onChange={(e) => setProfileData({ ...profileData, messengerContact: e.target.value })}
@@ -1027,7 +1036,7 @@ export default function Home() {
                       />
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground w-40">Статус:</span>
+                      <span className="text-sm text-muted-foreground w-40">{t("profile.status")}</span>
                       <Badge variant={customer.status === "approved" ? "default" : "secondary"}>
                         {customer.status}
                       </Badge>
@@ -1037,19 +1046,19 @@ export default function Home() {
 
                 <Card className="md:col-span-2">
                   <CardHeader>
-                    <CardTitle>Статистика заказов</CardTitle>
+                    <CardTitle>{t("profile.orderStats")}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
                     <div className="flex justify-between">
-                      <span>Количество заказов:</span>
+                      <span>{t("profile.orderCount")}</span>
                       <span className="font-medium">{customerStats?.orderCount ?? 0}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Сумма всех заказов:</span>
+                      <span>{t("profile.totalAmount")}</span>
                       <span className="font-medium">{(customerStats?.totalOrderAmount ?? 0).toLocaleString()} ֏</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Просроченные платежи:</span>
+                      <span>{t("profile.overduePayments")}</span>
                       <span className="font-medium text-destructive">{(customerStats?.overduePayments ?? 0).toLocaleString()} ֏</span>
                     </div>
                   </CardContent>
@@ -1068,8 +1077,8 @@ export default function Home() {
           {(!isAuthenticated || activeSection === "products") && (
             <>
               <div className="mb-6 flex items-center gap-3 flex-wrap">
-                <h1 className="text-3xl font-bold">Каталог товаров</h1>
-                <span className="text-sm text-muted-foreground">Цены включают НДС</span>
+                <h1 className="text-3xl font-bold">{t("home.catalogTitle")}</h1>
+                <span className="text-sm text-muted-foreground">{t("home.vatIncluded")}</span>
                 {isAuthenticated && !isAdmin && (
                   <Button
                     variant="outline"
@@ -1084,7 +1093,7 @@ export default function Home() {
                     data-testid="button-download-price-list"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Прайс-лист PDF
+                    {t("home.priceListPdf")}
                   </Button>
                 )}
               </div>
@@ -1095,10 +1104,10 @@ export default function Home() {
                   <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-4 items-end">
                     {/* Price Range Filter */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Цена (мин)</label>
+                      <label className="text-sm font-medium">{t("home.filterMinPrice")}</label>
                       <Input
                         type="number"
-                        placeholder="От"
+                        placeholder={t("home.filterFrom")}
                         value={minPrice}
                         onChange={(e) => setMinPrice(e.target.value)}
                         data-testid="input-filter-min-price"
@@ -1106,10 +1115,10 @@ export default function Home() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Цена (макс)</label>
+                      <label className="text-sm font-medium">{t("home.filterMaxPrice")}</label>
                       <Input
                         type="number"
-                        placeholder="До"
+                        placeholder={t("home.filterTo")}
                         value={maxPrice}
                         onChange={(e) => setMaxPrice(e.target.value)}
                         data-testid="input-filter-max-price"
@@ -1119,19 +1128,19 @@ export default function Home() {
 
                     {/* Status Filter */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Статус</label>
+                      <label className="text-sm font-medium">{t("home.filterStatus")}</label>
                       <Select value={statusFilter || "all"} onValueChange={(value) => setStatusFilter(value === "all" ? "" : value)}>
                         <SelectTrigger data-testid="select-filter-status" className="w-full sm:w-40">
-                          <SelectValue placeholder="Все статусы" />
+                          <SelectValue placeholder={t("home.filterAllStatuses")} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">Все статусы</SelectItem>
+                          <SelectItem value="all">{t("home.filterAllStatuses")}</SelectItem>
                           {(["in_stock", "low_stock", "out_of_stock", "on_order"] as const)
                             .filter(s => products.some(p => p.stock === s))
                             .map(s => {
                               const label: Record<string, string> = {
-                                in_stock: "В наличии", low_stock: "Мало",
-                                out_of_stock: "Нет в наличии", on_order: "Под заказ",
+                                in_stock: t("product.inStock"), low_stock: t("product.lowStock"),
+                                out_of_stock: t("product.outOfStock"), on_order: t("product.onOrder"),
                               };
                               return <SelectItem key={s} value={s}>{label[s]}</SelectItem>;
                             })}
@@ -1141,13 +1150,13 @@ export default function Home() {
 
                     {/* Delivery Time Filter */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Срок доставки</label>
+                      <label className="text-sm font-medium">{t("home.filterDeliveryTime")}</label>
                       <Select value={deliveryTimeFilter || "all"} onValueChange={(value) => setDeliveryTimeFilter(value === "all" ? "" : value)}>
                         <SelectTrigger data-testid="select-filter-delivery-time" className="w-full sm:w-40">
-                          <SelectValue placeholder="Все сроки" />
+                          <SelectValue placeholder={t("home.filterAllTimes")} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">Все сроки</SelectItem>
+                          <SelectItem value="all">{t("home.filterAllTimes")}</SelectItem>
                           {Array.from(new Set(products.map(p => p.eta).filter((e): e is string => !!e)))
                             .sort()
                             .map(eta => <SelectItem key={eta} value={eta}>{eta}</SelectItem>)}
@@ -1157,13 +1166,13 @@ export default function Home() {
 
                     {/* Brand Filter */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Бренд</label>
+                      <label className="text-sm font-medium">{t("home.filterBrand")}</label>
                       <Select value={brandFilter || "all"} onValueChange={(value) => setBrandFilter(value === "all" ? "" : value)}>
                         <SelectTrigger data-testid="select-filter-brand" className="w-full sm:w-40">
-                          <SelectValue placeholder="Все бренды" />
+                          <SelectValue placeholder={t("home.filterAllBrands")} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">Все бренды</SelectItem>
+                          <SelectItem value="all">{t("home.filterAllBrands")}</SelectItem>
                           {Array.from(new Set(products.filter(p => p.brand && typeof p.brand === 'string').map(p => p.brand as string)))
                             .sort()
                             .map((brand) => (
@@ -1177,13 +1186,13 @@ export default function Home() {
 
                     {/* Category Filter */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Категория</label>
+                      <label className="text-sm font-medium">{t("home.filterCategory")}</label>
                       <Select value={categoryFilter || "all"} onValueChange={(value) => setCategoryFilter(value === "all" ? "" : value)}>
                         <SelectTrigger data-testid="select-filter-category" className="w-full sm:w-40">
-                          <SelectValue placeholder="Все категории" />
+                          <SelectValue placeholder={t("home.filterAllCategories")} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">Все категории</SelectItem>
+                          <SelectItem value="all">{t("home.filterAllCategories")}</SelectItem>
                           {Array.from(new Set(products.map(p => p.category).filter((c): c is string => !!c)))
                             .sort()
                             .map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
@@ -1206,7 +1215,7 @@ export default function Home() {
                       }}
                       data-testid="button-clear-filters"
                       className="bg-black hover:bg-black/80 text-white self-end"
-                      title="Очистить все фильтры"
+                      title={t("home.clearAllFilters")}
                     >
                       <X className="h-4 w-4" />
                     </Button>
@@ -1216,7 +1225,7 @@ export default function Home() {
                   <div>
                     <Input
                       type="text"
-                      placeholder="Поиск по названию, артикулу..."
+                      placeholder={t("home.searchPlaceholder")}
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       data-testid="input-search-products"
@@ -1272,7 +1281,7 @@ export default function Home() {
                   <>
                     {filteredProducts.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
-                        Товары не найдены по выбранным фильтрам
+                        {t("home.noProductsFiltered")}
                       </div>
                     ) : (
                       <ProductListTable

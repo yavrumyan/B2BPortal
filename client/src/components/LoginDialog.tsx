@@ -19,13 +19,9 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { useLanguage } from "@/contexts/LanguageContext";
 
-const loginSchema = z.object({
-  email: z.string().email("Введите корректный email"),
-  password: z.string().min(6, "Пароль должен содержать минимум 6 символов"),
-});
-
-type LoginFormData = z.infer<typeof loginSchema>;
+type LoginFormData = { email: string; password: string };
 
 interface LoginDialogProps {
   isOpen: boolean;
@@ -40,7 +36,13 @@ export default function LoginDialog({
   onLogin,
   onRegisterClick,
 }: LoginDialogProps) {
+  const { t } = useLanguage();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const loginSchema = z.object({
+    email: z.string().email(t("loginDialog.emailError")),
+    password: z.string().min(6, t("loginDialog.passwordError")),
+  });
 
   const form = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -64,9 +66,9 @@ export default function LoginDialog({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md" data-testid="dialog-login">
         <DialogHeader>
-          <DialogTitle>Вход в B2B портал</DialogTitle>
+          <DialogTitle>{t("loginDialog.title")}</DialogTitle>
           <DialogDescription>
-            Введите ваши данные для входа в систему
+            {t("loginDialog.subtitle")}
           </DialogDescription>
         </DialogHeader>
 
@@ -117,7 +119,7 @@ export default function LoginDialog({
                 disabled={isSubmitting}
                 data-testid="button-submit-login"
               >
-                {isSubmitting ? "Вход..." : "Войти"}
+                {isSubmitting ? t("loginDialog.submitting") : t("loginDialog.submit")}
               </Button>
 
               <Button
@@ -127,7 +129,7 @@ export default function LoginDialog({
                 onClick={onRegisterClick}
                 data-testid="button-register"
               >
-                Зарегистрироваться
+                {t("loginDialog.register")}
               </Button>
             </div>
           </form>

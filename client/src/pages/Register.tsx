@@ -27,12 +27,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 type RegistrationFormData = z.infer<typeof insertBusinessRegistrationSchema>;
 
 export default function Register() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { t } = useLanguage();
 
   const form = useForm<RegistrationFormData>({
     resolver: zodResolver(insertBusinessRegistrationSchema),
@@ -63,15 +65,15 @@ export default function Register() {
         });
       }
       toast({
-        title: "Заявка отправлена",
-        description: "Ваша заявка отправлена на рассмотрение. Вы получите уведомление после проверки администратором.",
+        title: t("register.success"),
+        description: t("register.successDesc"),
       });
       setLocation("/login");
     },
     onError: (error: Error) => {
       toast({
-        title: "Ошибка регистрации",
-        description: error.message || "Не удалось отправить заявку",
+        title: t("register.error"),
+        description: error.message || t("register.errorDesc"),
         variant: "destructive",
       });
     },
@@ -97,7 +99,7 @@ export default function Register() {
             data-testid="button-back"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Назад
+            {t("register.back")}
           </Button>
         </div>
       </div>
@@ -106,9 +108,9 @@ export default function Register() {
         <div className="container mx-auto max-w-4xl">
           <Card>
             <CardHeader>
-              <CardTitle className="text-2xl">Регистрация корпоративного клиента</CardTitle>
+              <CardTitle className="text-2xl">{t("register.title")}</CardTitle>
               <CardDescription>
-                Заполните форму для регистрации. Ваша заявка будет рассмотрена администратором.
+                {t("register.subtitle")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -117,7 +119,7 @@ export default function Register() {
                   <div className="grid gap-6 md:grid-cols-2">
                     <div className="space-y-4">
                       <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                        ДАННЫЕ КОМПАНИИ (на армянском)
+                        {t("register.companyDataTitle")}
                       </h3>
 
                       <FormField
@@ -214,7 +216,7 @@ export default function Register() {
 
                     <div className="space-y-4">
                       <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                        Контактное лицо
+                        {t("register.contactPerson")}
                       </h3>
 
                       <FormField
@@ -222,10 +224,10 @@ export default function Register() {
                         name="representativeName"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>ФИО представителя *</FormLabel>
+                            <FormLabel>{t("register.representativeName")}</FormLabel>
                             <FormControl>
                               <Input
-                                placeholder="Иванов Иван Иванович"
+                                placeholder={t("register.representativePlaceholder")}
                                 {...field}
                                 data-testid="input-representative-name"
                               />
@@ -259,7 +261,7 @@ export default function Register() {
                         name="phone"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Телефон *</FormLabel>
+                            <FormLabel>{t("register.phone")}</FormLabel>
                             <FormControl>
                               <Input
                                 placeholder="+374 XX XXX XXX"
@@ -277,7 +279,7 @@ export default function Register() {
                         name="messenger"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Мессенджер *</FormLabel>
+                            <FormLabel>{t("register.messenger")}</FormLabel>
                             <Select onValueChange={field.onChange} defaultValue={field.value}>
                               <FormControl>
                                 <SelectTrigger data-testid="select-messenger">
@@ -300,7 +302,7 @@ export default function Register() {
                         name="messengerContact"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Контакт в мессенджере *</FormLabel>
+                            <FormLabel>{t("register.messengerContact")}</FormLabel>
                             <FormControl>
                               <Input
                                 placeholder="@username или +374XXXXXXXX"
@@ -318,11 +320,11 @@ export default function Register() {
                         name="password"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Пароль *</FormLabel>
+                            <FormLabel>{t("register.password")}</FormLabel>
                             <FormControl>
                               <Input
                                 type="password"
-                                placeholder="Минимум 8 символов"
+                                placeholder={t("register.passwordHint")}
                                 {...field}
                                 data-testid="input-password"
                               />
@@ -341,14 +343,14 @@ export default function Register() {
                       onClick={() => setLocation("/login")}
                       data-testid="button-cancel"
                     >
-                      Отмена
+                      {t("register.cancel")}
                     </Button>
                     <Button
                       type="submit"
                       disabled={registrationMutation.isPending}
                       data-testid="button-submit"
                     >
-                      {registrationMutation.isPending ? "Отправка..." : "Отправить заявку"}
+                      {registrationMutation.isPending ? t("register.submitting") : t("register.submit")}
                     </Button>
                   </div>
                 </form>

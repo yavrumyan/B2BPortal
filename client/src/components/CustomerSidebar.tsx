@@ -1,6 +1,7 @@
 
 import { Package, ShoppingBag, User, MessageCircle, Mail, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/contexts/LanguageContext";
 import logoPath from "@assets/logo.png";
 
 interface CustomerSidebarProps {
@@ -20,27 +21,28 @@ export default function CustomerSidebar({
   isOpen = false,
   onClose,
 }: CustomerSidebarProps) {
+  const { t } = useLanguage();
   const sections = [
     {
       id: "products" as const,
-      label: "Каталог товаров",
+      label: t("sidebar.catalog"),
       icon: Package,
     },
     {
       id: "inquiries" as const,
-      label: "Мои запросы",
+      label: t("sidebar.inquiries"),
       icon: Mail,
       badge: inquiryCount,
     },
     {
       id: "orders" as const,
-      label: "Мои заказы",
+      label: t("sidebar.orders"),
       icon: ShoppingBag,
       badge: orderCount,
     },
     {
       id: "profile" as const,
-      label: "Мои данные",
+      label: t("sidebar.profile"),
       icon: User,
     },
   ];
@@ -110,7 +112,7 @@ export default function CustomerSidebar({
             rel="noopener noreferrer"
           >
             <MessageCircle className="h-5 w-5" />
-            <span>Написать нам</span>
+            <span>{t("sidebar.contactUs")}</span>
           </a>
         </Button>
       </div>

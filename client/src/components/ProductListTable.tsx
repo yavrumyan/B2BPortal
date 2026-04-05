@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Product } from "@shared/schema";
 import { calculatePrice } from "@shared/utils";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 type SortKey = "name" | "price" | "stock" | "eta" | null;
 type SortOrder = "asc" | "desc";
@@ -36,6 +37,7 @@ export default function ProductListTable({
   governmentMarkupPercentage = 10,
   isAuthenticated = false,
 }: ProductListTableProps) {
+  const { t } = useLanguage();
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [editingProduct, setEditingProduct] = useState<Record<string, Partial<Product>>>({});
   const [searchTerm, setSearchTerm] = useState("");
@@ -142,13 +144,13 @@ export default function ProductListTable({
   const getStockBadge = (stock: Product["stock"]) => {
     switch (stock) {
       case "in_stock":
-        return <Badge className="bg-green-600 text-white">В наличии</Badge>;
+        return <Badge className="bg-green-600 text-white">{t("product.inStock")}</Badge>;
       case "low_stock":
-        return <Badge className="bg-yellow-600 text-white">Call</Badge>;
+        return <Badge className="bg-yellow-600 text-white">{t("product.call")}</Badge>;
       case "out_of_stock":
-        return <Badge variant="destructive">Нет в наличии</Badge>;
+        return <Badge variant="destructive">{t("product.outOfStock")}</Badge>;
       case "on_order":
-        return <Badge className="bg-blue-600 text-white">Под заказ</Badge>;
+        return <Badge className="bg-blue-600 text-white">{t("product.onOrder")}</Badge>;
     }
   };
 
@@ -233,7 +235,7 @@ export default function ProductListTable({
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs text-muted-foreground hover:text-primary hover:underline text-left"
-                  title="Поиск изображений в Google"
+                  title={t("product.googleImageSearch")}
                   data-testid={`text-sku-${product.id}`}
                 >
                   {product.sku}
@@ -302,7 +304,7 @@ export default function ProductListTable({
             data-testid={`button-add-cart-${product.id}`}
           >
             <ShoppingCart className="h-4 w-4 mr-1" />
-            В корзину
+            {t("product.addToCart")}
           </Button>
         </div>
       </div>
@@ -321,7 +323,7 @@ export default function ProductListTable({
     setCartLinkDialog(d => d ? { ...d, creating: true } : d);
     try {
       const items = Object.entries(cartLinkDialog.quantities).map(([productId, quantity]) => ({ productId, quantity }));
-      const body: Record<string, any> = { name: cartLinkDialog.linkName || "Ссылка на корзину", items };
+      const body: Record<string, any> = { name: cartLinkDialog.linkName || t("cartLink.defaultName"), items };
       if (cartLinkDialog.expiresAt) body.expiresAt = cartLinkDialog.expiresAt;
       const res = await fetch("/api/admin/shared-carts", {
         method: "POST",
@@ -334,7 +336,7 @@ export default function ProductListTable({
       setCartLinkDialog(d => d ? { ...d, generatedUrl: data.url, creating: false } : d);
     } catch (e: any) {
       setCartLinkDialog(d => d ? { ...d, creating: false } : d);
-      alert(e.message || "Ошибка при создании ссылки");
+      alert(e.message || t("cartLink.error"));
     }
   };
 
@@ -343,12 +345,12 @@ export default function ProductListTable({
       <div className="min-w-full">
         {adminMode && selectedIds.size > 0 && (
           <div className="flex items-center gap-3 px-4 py-2 bg-primary/5 border-b border-primary/20 text-sm">
-            <span className="text-muted-foreground">{selectedIds.size} товаров выбрано</span>
+            <span className="text-muted-foreground">{selectedIds.size} {t("product.selected")}</span>
             <Button size="sm" variant="outline" className="h-7 gap-1" onClick={openCartLinkDialog}>
-              <Link2 className="h-3 w-3" /> Создать ссылку на корзину
+              <Link2 className="h-3 w-3" /> {t("product.createCartLink")}
             </Button>
             <Button size="sm" variant="ghost" className="h-7 text-muted-foreground" onClick={() => setSelectedIds(new Set())}>
-              <X className="h-3 w-3 mr-1" /> Снять выделение
+              <X className="h-3 w-3 mr-1" /> {t("product.deselectAll")}
             </Button>
           </div>
         )}
@@ -361,7 +363,7 @@ export default function ProductListTable({
                 pagedProducts.forEach(p => checked ? next.add(p.id) : next.delete(p.id));
                 setSelectedIds(next);
               }}
-              aria-label="Выбрать все"
+              aria-label={t("product.selectAll")}
             />
           )}
           <div
@@ -369,18 +371,18 @@ export default function ProductListTable({
             className="cursor-pointer hover-elevate p-1 -m-1 rounded flex items-center gap-1"
             data-testid="header-sort-name"
           >
-            Наименование
+            {t("product.name")}
             {sortKey === "name" && (
               sortOrder === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
             )}
           </div>
-          {!adminMode && <div>Бренд</div>}
+          {!adminMode && <div>{t("product.brand")}</div>}
           <div
             onClick={() => handleSort("price")}
             className="cursor-pointer hover-elevate p-1 -m-1 rounded flex items-center gap-1"
             data-testid="header-sort-price"
           >
-            Цена
+            {t("product.price")}
             {sortKey === "price" && (
               sortOrder === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
             )}
@@ -390,7 +392,7 @@ export default function ProductListTable({
             className="cursor-pointer hover-elevate p-1 -m-1 rounded flex items-center gap-1"
             data-testid="header-sort-stock"
           >
-            Статус
+            {t("product.status")}
             {sortKey === "stock" && (
               sortOrder === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
             )}
@@ -400,20 +402,20 @@ export default function ProductListTable({
             className="cursor-pointer hover-elevate p-1 -m-1 rounded flex items-center gap-1"
             data-testid="header-sort-eta"
           >
-            Срок доставки
+            {t("product.deliveryTime")}
             {sortKey === "eta" && (
               sortOrder === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
             )}
           </div>
-          <div>MOQ (мин. кол-во)</div>
+          <div>{t("product.moq")}</div>
           {adminMode ? (
             <>
-              <div>Склад</div>
-              <div>Действия</div>
+              <div>{t("product.warehouse")}</div>
+              <div>{t("product.actions")}</div>
             </>
           ) : (
             <>
-              <div>Количество</div>
+              <div>{t("product.quantity")}</div>
               <div></div>
             </>
           )}
@@ -437,7 +439,7 @@ export default function ProductListTable({
                 checked ? next.add(product.id) : next.delete(product.id);
                 setSelectedIds(next);
               }}
-              aria-label={`Выбрать ${product.name}`}
+              aria-label={`${t("product.selectAll")} ${product.name}`}
             />
           </div>
         )}
@@ -454,14 +456,14 @@ export default function ProductListTable({
                 <Input
                   value={getEditedValue(product.id, "sku", product.sku || "")}
                   onChange={(e) => handleFieldChange(product.id, "sku", e.target.value)}
-                  placeholder="Артикул"
+                  placeholder={t("product.sku")}
                   className="text-xs flex-1 min-w-0"
                   data-testid={`input-edit-sku-${product.id}`}
                 />
                 <Input
                   value={getEditedValue(product.id, "brand", product.brand || "")}
                   onChange={(e) => handleFieldChange(product.id, "brand", e.target.value)}
-                  placeholder="Бренд"
+                  placeholder={t("product.brand")}
                   className="text-xs flex-1 min-w-0"
                   data-testid={`input-edit-brand-${product.id}`}
                 />
@@ -470,7 +472,7 @@ export default function ProductListTable({
                   onValueChange={(value) => handleFieldChange(product.id, "category", value)}
                 >
                   <SelectTrigger className="text-xs flex-1 min-w-0 h-9" data-testid={`select-edit-category-${product.id}`}>
-                    <SelectValue placeholder="Категория" />
+                    <SelectValue placeholder={t("product.category")} />
                   </SelectTrigger>
                   <SelectContent>
                     {CATEGORIES.map((cat) => (
@@ -494,13 +496,13 @@ export default function ProductListTable({
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs text-muted-foreground hover:text-primary hover:underline"
-                    title="Поиск изображений в Google"
+                    title={t("product.googleImageSearch")}
                   >
-                    Артикул: {product.sku}
+                    {t("product.sku")}: {product.sku}
                   </a>
                 ) : (
                   <span className="text-xs text-muted-foreground">
-                    Артикул: {product.sku}
+                    {t("product.sku")}: {product.sku}
                   </span>
                 )
               )}
@@ -542,10 +544,10 @@ export default function ProductListTable({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="in_stock">В наличии</SelectItem>
-                <SelectItem value="low_stock">Call</SelectItem>
-                <SelectItem value="out_of_stock">Нет в наличии</SelectItem>
-                <SelectItem value="on_order">Под заказ</SelectItem>
+                <SelectItem value="in_stock">{t("product.inStock")}</SelectItem>
+                <SelectItem value="low_stock">{t("product.call")}</SelectItem>
+                <SelectItem value="out_of_stock">{t("product.outOfStock")}</SelectItem>
+                <SelectItem value="on_order">{t("product.onOrder")}</SelectItem>
               </SelectContent>
             </Select>
           ) : (
@@ -685,7 +687,7 @@ export default function ProductListTable({
       {adminMode && (
         <div className="mb-4">
           <Input
-            placeholder="Поиск по названию или артикулу..."
+            placeholder={t("product.searchPlaceholder")}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             data-testid="input-search-products"
@@ -694,7 +696,7 @@ export default function ProductListTable({
       )}
       {filteredProducts.length === 0 ? (
         <div className="text-center text-muted-foreground py-8">
-          {searchTerm ? "Товары не найдены" : "Нет товаров"}
+          {searchTerm ? t("product.notFound") : t("product.noProducts")}
         </div>
       ) : (
         <>
@@ -714,7 +716,7 @@ export default function ProductListTable({
                 className={`text-xs ${sortKey === "name" ? "font-bold" : ""}`}
                 data-testid="mobile-sort-name"
               >
-                Имя {sortKey === "name" && (sortOrder === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />)}
+                {t("product.name")} {sortKey === "name" && (sortOrder === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />)}
               </Button>
               <Button
                 variant="ghost"
@@ -723,7 +725,7 @@ export default function ProductListTable({
                 className={`text-xs ${sortKey === "price" ? "font-bold" : ""}`}
                 data-testid="mobile-sort-price"
               >
-                Цена {sortKey === "price" && (sortOrder === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />)}
+                {t("product.price")} {sortKey === "price" && (sortOrder === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />)}
               </Button>
               <Button
                 variant="ghost"
@@ -732,7 +734,7 @@ export default function ProductListTable({
                 className={`text-xs ${sortKey === "stock" ? "font-bold" : ""}`}
                 data-testid="mobile-sort-stock"
               >
-                Статус {sortKey === "stock" && (sortOrder === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />)}
+                {t("product.status")} {sortKey === "stock" && (sortOrder === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />)}
               </Button>
             </div>
             {pagedProducts.map((product) => renderMobileProductCard(product))}
@@ -743,7 +745,7 @@ export default function ProductListTable({
           {/* ── Pagination bar ── */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
-              <span>Строк на странице:</span>
+              <span>{t("product.rowsPerPage")}</span>
               <Select
                 value={String(pageSize)}
                 onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}
@@ -762,14 +764,13 @@ export default function ProductListTable({
             <span>
               {totalItems === 0
                 ? "0"
-                : `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, totalItems)}`
-              }{" из "}{totalItems}
+                : `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, totalItems)}`}{` ${t("product.of")} `}{totalItems}
             </span>
 
             <div className="flex items-center gap-1">
               <Button variant="outline" size="sm" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>«</Button>
               <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1}>‹</Button>
-              <span className="px-2">Стр. {currentPage} из {totalPages}</span>
+              <span className="px-2">{t("product.page")} {currentPage} {t("product.of")} {totalPages}</span>
               <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage === totalPages}>›</Button>
               <Button variant="outline" size="sm" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}>»</Button>
             </div>
@@ -782,12 +783,12 @@ export default function ProductListTable({
         <Dialog open onOpenChange={(open) => { if (!open) setCartLinkDialog(null); }}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>Создать ссылку на корзину</DialogTitle>
+              <DialogTitle>{t("cartLink.title")}</DialogTitle>
             </DialogHeader>
 
             {cartLinkDialog.generatedUrl ? (
               <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">Ссылка создана. Скопируйте и используйте её в баннере или отправьте клиенту.</p>
+                <p className="text-sm text-muted-foreground">{t("cartLink.description")}</p>
                 <div className="flex gap-2">
                   <Input value={cartLinkDialog.generatedUrl} readOnly className="text-xs" />
                   <Button
@@ -803,21 +804,21 @@ export default function ProductListTable({
                     {cartLinkDialog.copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
                   </Button>
                 </div>
-                <Button className="w-full" variant="outline" onClick={() => setCartLinkDialog(null)}>Закрыть</Button>
+                <Button className="w-full" variant="outline" onClick={() => setCartLinkDialog(null)}>{t("cartLink.close")}</Button>
               </div>
             ) : (
               <div className="space-y-4">
                 <div className="space-y-1">
-                  <label className="text-sm font-medium">Название ссылки</label>
+                  <label className="text-sm font-medium">{t("cartLink.name")}</label>
                   <Input
-                    placeholder="Например: Акция на мониторы LG"
+                    placeholder={t("cartLink.namePlaceholder")}
                     value={cartLinkDialog.linkName}
                     onChange={(e) => setCartLinkDialog(d => d ? { ...d, linkName: e.target.value } : d)}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Товары и количество</label>
+                  <label className="text-sm font-medium">{t("cartLink.productsAndQty")}</label>
                   <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                     {products.filter(p => selectedIds.has(p.id)).map(p => (
                       <div key={p.id} className="flex items-center gap-2 min-w-0">
@@ -832,26 +833,26 @@ export default function ProductListTable({
                             quantities: { ...d.quantities, [p.id]: Math.max(1, parseInt(e.target.value) || 1) }
                           } : d)}
                         />
-                        <span className="text-xs text-muted-foreground shrink-0">шт.</span>
+                        <span className="text-xs text-muted-foreground shrink-0">{t("product.pcs")}</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-sm font-medium">Срок действия (необязательно)</label>
+                  <label className="text-sm font-medium">{t("cartLink.expiry")}</label>
                   <Input
                     type="date"
                     value={cartLinkDialog.expiresAt}
                     min={new Date().toISOString().split("T")[0]}
                     onChange={(e) => setCartLinkDialog(d => d ? { ...d, expiresAt: e.target.value } : d)}
                   />
-                  <p className="text-xs text-muted-foreground">Оставьте пустым — ссылка бессрочная</p>
+                  <p className="text-xs text-muted-foreground">{t("cartLink.expiryHint")}</p>
                 </div>
 
                 <Button className="w-full" onClick={createCartLink} disabled={cartLinkDialog.creating}>
                   <Link2 className="h-4 w-4 mr-2" />
-                  {cartLinkDialog.creating ? "Создание..." : "Создать ссылку"}
+                  {cartLinkDialog.creating ? t("cartLink.creating") : t("cartLink.create")}
                 </Button>
               </div>
             )}

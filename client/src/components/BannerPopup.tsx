@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface Banner {
   id: string;
@@ -11,6 +12,7 @@ interface Banner {
 }
 
 export default function BannerPopup() {
+  const { t } = useLanguage();
   const [visible, setVisible] = useState(false);
   const [index, setIndex] = useState(0);
 
@@ -51,7 +53,7 @@ export default function BannerPopup() {
         <button
           onClick={() => setVisible(false)}
           className="absolute -top-3 -right-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-lg hover:bg-gray-100 transition-colors"
-          aria-label="Закрыть"
+          aria-label={t("banner.close")}
         >
           <X className="h-4 w-4 text-gray-700" />
         </button>
@@ -59,7 +61,7 @@ export default function BannerPopup() {
         {/* Image */}
         <img
           src={current.imageUrl}
-          alt="Рекламный баннер"
+          alt={t("banner.alt")}
           className={`block max-w-[90vw] max-h-[85vh] w-auto h-auto rounded-lg shadow-2xl object-contain ${
             current.redirectUrl ? "cursor-pointer" : "cursor-default"
           }`}
@@ -73,14 +75,14 @@ export default function BannerPopup() {
             <button
               onClick={prev}
               className="absolute left-2 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-white/80 shadow hover:bg-white transition-colors"
-              aria-label="Предыдущий"
+              aria-label={t("banner.prev")}
             >
               <ChevronLeft className="h-5 w-5 text-gray-700" />
             </button>
             <button
               onClick={next}
               className="absolute right-2 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-white/80 shadow hover:bg-white transition-colors"
-              aria-label="Следующий"
+              aria-label={t("banner.next")}
             >
               <ChevronRight className="h-5 w-5 text-gray-700" />
             </button>
@@ -94,7 +96,7 @@ export default function BannerPopup() {
                   className={`h-2 w-2 rounded-full transition-colors ${
                     i === index ? "bg-white" : "bg-white/50"
                   }`}
-                  aria-label={`Баннер ${i + 1}`}
+                  aria-label={`${t("settings.bannerOrder")} ${i + 1}`}
                 />
               ))}
             </div>

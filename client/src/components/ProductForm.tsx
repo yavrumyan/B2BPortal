@@ -22,25 +22,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useLanguage } from "@/contexts/LanguageContext";
 
-const productSchema = z.object({
-  name: z.string().min(2, "Введите название товара"),
-  sku: z.string().min(1, "Введите артикул"),
-  brand: z.string().optional(),
-  price: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
-    message: "Введите корректную цену",
-  }),
-  availableQuantity: z.string().refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
-    message: "Введите корректное количество",
-  }),
-  stock: z.enum(["in_stock", "low_stock", "out_of_stock", "on_order"]),
-  moq: z.string().optional(),
-  eta: z.string().optional(),
-  description: z.string().optional(),
-  visibleCustomerTypes: z.array(z.string()).optional(),
-});
-
-type ProductFormData = z.infer<typeof productSchema>;
+interface ProductFormData {
+  name: string;
+  sku: string;
+  brand?: string;
+  price: string;
+  availableQuantity: string;
+  stock: "in_stock" | "low_stock" | "out_of_stock" | "on_order";
+  moq?: string;
+  eta?: string;
+  description?: string;
+  visibleCustomerTypes?: string[];
+}
 
 interface ProductFormProps {
   onSubmit?: (data: ProductFormData) => void;
@@ -48,9 +43,32 @@ interface ProductFormProps {
 }
 
 export default function ProductForm({ onSubmit, onCancel }: ProductFormProps) {
+  const { t } = useLanguage();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const customerTypes = ["дилер", "корпоративный", "гос. учреждение"];
+  const customerTypeLabels: Record<string, string> = {
+    "дилер": t("form.dealer"),
+    "корпоративный": t("form.corporate"),
+    "гос. учреждение": t("form.government"),
+  };
+
+  const productSchema = z.object({
+    name: z.string().min(2, t("form.nameRequired")),
+    sku: z.string().min(1, t("form.skuRequired")),
+    brand: z.string().optional(),
+    price: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
+      message: t("form.priceInvalid"),
+    }),
+    availableQuantity: z.string().refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
+      message: t("form.qtyInvalid"),
+    }),
+    stock: z.enum(["in_stock", "low_stock", "out_of_stock", "on_order"]),
+    moq: z.string().optional(),
+    eta: z.string().optional(),
+    description: z.string().optional(),
+    visibleCustomerTypes: z.array(z.string()).optional(),
+  });
 
   const form = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
@@ -90,7 +108,7 @@ export default function ProductForm({ onSubmit, onCancel }: ProductFormProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Добавить товар</CardTitle>
+        <CardTitle>{t("form.addProduct")}</CardTitle>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -100,10 +118,10 @@ export default function ProductForm({ onSubmit, onCancel }: ProductFormProps) {
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Название *</FormLabel>
+                  <FormLabel>{t("form.name")}</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="Например: Ноутбук HP Pavilion 15"
+                      placeholder={t("form.namePlaceholder")}
                       {...field}
                       data-testid="input-product-name"
                     />
@@ -119,7 +137,7 @@ export default function ProductForm({ onSubmit, onCancel }: ProductFormProps) {
                 name="sku"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Артикул *</FormLabel>
+                    <FormLabel>{t("form.sku")}</FormLabel>
                     <FormControl>
                       <Input
                         placeholder="HP-PAV-15-001"
@@ -137,7 +155,7 @@ export default function ProductForm({ onSubmit, onCancel }: ProductFormProps) {
                 name="brand"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Бренд</FormLabel>
+                    <FormLabel>{t("form.brand")}</FormLabel>
                     <FormControl>
                       <Input
                         placeholder="HP"
@@ -157,7 +175,7 @@ export default function ProductForm({ onSubmit, onCancel }: ProductFormProps) {
                 name="price"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Цена (֏) *</FormLabel>
+                    <FormLabel>{t("form.price")}</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
@@ -176,7 +194,7 @@ export default function ProductForm({ onSubmit, onCancel }: ProductFormProps) {
                 name="availableQuantity"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Доступное количество *</FormLabel>
+                    <FormLabel>{t("form.availableQty")}</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
@@ -196,7 +214,7 @@ export default function ProductForm({ onSubmit, onCancel }: ProductFormProps) {
               name="moq"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>МОК (минимальный объём заказа)</FormLabel>
+                  <FormLabel>{t("form.moq")}</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
@@ -216,7 +234,7 @@ export default function ProductForm({ onSubmit, onCancel }: ProductFormProps) {
                 name="stock"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Статус *</FormLabel>
+                    <FormLabel>{t("form.status")}</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger data-testid="select-product-stock">
@@ -224,10 +242,10 @@ export default function ProductForm({ onSubmit, onCancel }: ProductFormProps) {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="in_stock">В наличии</SelectItem>
-                        <SelectItem value="low_stock">Мало</SelectItem>
-                        <SelectItem value="out_of_stock">Нет в наличии</SelectItem>
-                        <SelectItem value="on_order">Под заказ</SelectItem>
+                        <SelectItem value="in_stock">{t("product.inStock")}</SelectItem>
+                        <SelectItem value="low_stock">{t("product.lowStock")}</SelectItem>
+                        <SelectItem value="out_of_stock">{t("product.outOfStock")}</SelectItem>
+                        <SelectItem value="on_order">{t("product.onOrder")}</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -240,7 +258,7 @@ export default function ProductForm({ onSubmit, onCancel }: ProductFormProps) {
                 name="eta"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Срок доставки</FormLabel>
+                    <FormLabel>{t("form.deliveryTime")}</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger data-testid="select-product-eta">
@@ -269,10 +287,10 @@ export default function ProductForm({ onSubmit, onCancel }: ProductFormProps) {
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Описание</FormLabel>
+                  <FormLabel>{t("form.description")}</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="Дополнительная информация о товаре"
+                      placeholder={t("form.descriptionPlaceholder")}
                       className="resize-none"
                       {...field}
                       data-testid="input-product-description"
@@ -284,7 +302,7 @@ export default function ProductForm({ onSubmit, onCancel }: ProductFormProps) {
             />
 
             <FormItem>
-              <FormLabel>Видимость для типов клиентов (пусто = видимо всем)</FormLabel>
+              <FormLabel>{t("form.visibility")}</FormLabel>
               <div className="space-y-2">
                 {customerTypes.map(type => (
                   <div key={type} className="flex items-center gap-2">
@@ -301,7 +319,7 @@ export default function ProductForm({ onSubmit, onCancel }: ProductFormProps) {
                       data-testid={`checkbox-visibility-${type}`}
                     />
                     <label htmlFor={`type-${type}`} className="text-sm cursor-pointer capitalize">
-                      {type}
+                      {customerTypeLabels[type] || type}
                     </label>
                   </div>
                 ))}
@@ -314,7 +332,7 @@ export default function ProductForm({ onSubmit, onCancel }: ProductFormProps) {
                 disabled={isSubmitting}
                 data-testid="button-submit-product"
               >
-                {isSubmitting ? "Сохранение..." : "Сохранить"}
+                {isSubmitting ? t("form.saving") : t("form.save")}
               </Button>
               {onCancel && (
                 <Button
@@ -323,7 +341,7 @@ export default function ProductForm({ onSubmit, onCancel }: ProductFormProps) {
                   onClick={onCancel}
                   data-testid="button-cancel-product"
                 >
-                  Отмена
+                  {t("form.cancel")}
                 </Button>
               )}
             </div>

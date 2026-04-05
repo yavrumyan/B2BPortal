@@ -2,6 +2,7 @@ import { X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export interface CartItem {
   id: string;
@@ -30,6 +31,7 @@ export default function CartSidebar({
   onRemoveItem,
   onCheckout,
 }: CartSidebarProps) {
+  const { t } = useLanguage();
   const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   if (!isOpen) return null;
@@ -44,7 +46,7 @@ export default function CartSidebar({
       <div className="fixed right-0 top-0 z-50 h-screen w-full max-w-md border-l bg-background shadow-lg">
         <div className="flex h-full flex-col">
           <div className="flex items-center justify-between border-b p-4">
-            <h2 className="text-lg font-semibold">Корзина</h2>
+            <h2 className="text-lg font-semibold">{t("cart.title")}</h2>
             <Button
               variant="ghost"
               size="icon"
@@ -58,7 +60,7 @@ export default function CartSidebar({
           {items.length === 0 ? (
             <div className="flex flex-1 items-center justify-center">
               <div className="text-center">
-                <div className="text-muted-foreground">Корзина пуста</div>
+                <div className="text-muted-foreground">{t("cart.empty")}</div>
               </div>
             </div>
           ) : (
@@ -80,7 +82,7 @@ export default function CartSidebar({
                           />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-                            Нет фото
+                            {t("cart.noPhoto")}
                           </div>
                         )}
                       </div>
@@ -149,12 +151,12 @@ export default function CartSidebar({
               <div className="border-t p-4">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Итого товаров:</span>
+                    <span className="text-muted-foreground">{t("cart.totalItems")}</span>
                     <span>{items.reduce((sum, item) => sum + item.quantity, 0)}</span>
                   </div>
                   <Separator />
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold">Итого:</span>
+                    <span className="font-semibold">{t("cart.total")}</span>
                     <span className="text-xl font-bold" data-testid="text-total">
                       {total.toLocaleString()} ֏
                     </span>
@@ -165,7 +167,7 @@ export default function CartSidebar({
                     onClick={onCheckout}
                     data-testid="button-checkout"
                   >
-                    Оформить заказ
+                    {t("cart.checkout")}
                   </Button>
                 </div>
               </div>

@@ -21,6 +21,7 @@ import type { Order, Product, OrderComment } from "@shared/schema";
 import { useState, useRef, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface OrderWithCustomer extends Order {
   customerName: string;
@@ -31,6 +32,7 @@ export default function OrderDetail() {
   const [, setLocation] = useLocation();
   const { isAdmin } = useAuth();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const queryClient = useQueryClient();
 
   const [deliveryDate, setDeliveryDate] = useState<string>("");
@@ -76,14 +78,14 @@ export default function OrderDetail() {
       queryClient.invalidateQueries({ queryKey: [`/api/orders/${params?.id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
       toast({
-        title: "Успешно",
-        description: "Статус оплаты обновлен",
+        title: t("common.success"),
+        description: t("orderDetail.paymentUpdated"),
       });
     },
     onError: () => {
       toast({
-        title: "Ошибка",
-        description: "Не удалось обновить статус оплаты",
+        title: t("common.error"),
+        description: t("orderDetail.paymentError"),
         variant: "destructive",
       });
     },
@@ -105,14 +107,14 @@ export default function OrderDetail() {
       queryClient.invalidateQueries({ queryKey: [`/api/orders/${params?.id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
       toast({
-        title: "Успешно",
-        description: "Статус доставки обновлен",
+        title: t("common.success"),
+        description: t("orderDetail.deliveryUpdated"),
       });
     },
     onError: () => {
       toast({
-        title: "Ошибка",
-        description: "Не удалось обновить статус доставки",
+        title: t("common.error"),
+        description: t("orderDetail.deliveryError"),
         variant: "destructive",
       });
     },
@@ -134,14 +136,14 @@ export default function OrderDetail() {
       queryClient.invalidateQueries({ queryKey: [`/api/orders/${params?.id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
       toast({
-        title: "Успешно",
-        description: "Дата доставки обновлена",
+        title: t("common.success"),
+        description: t("orderDetail.dateUpdated"),
       });
     },
     onError: () => {
       toast({
-        title: "Ошибка",
-        description: "Не удалось обновить дату доставки",
+        title: t("common.error"),
+        description: t("orderDetail.dateError"),
         variant: "destructive",
       });
     },
@@ -164,14 +166,14 @@ export default function OrderDetail() {
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
       setIsEditingItems(false);
       toast({
-        title: "Успешно",
-        description: "Товары в заказе обновлены",
+        title: t("common.success"),
+        description: t("orderDetail.itemsUpdated"),
       });
     },
     onError: () => {
       toast({
-        title: "Ошибка",
-        description: "Не удалось обновить товары",
+        title: t("common.error"),
+        description: t("orderDetail.itemsError"),
         variant: "destructive",
       });
     },
@@ -195,18 +197,18 @@ export default function OrderDetail() {
       setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     },
     onError: () => {
-      toast({ title: "Ошибка", description: "Не удалось добавить комментарий", variant: "destructive" });
+      toast({ title: t("common.error"), description: t("orderDetail.commentError"), variant: "destructive" });
     },
   });
 
   const getPaymentStatusBadge = (status: string) => {
     switch (status) {
       case "paid":
-        return <Badge variant="default">Оплачен</Badge>;
+        return <Badge variant="default">{t("orders.paid")}</Badge>;
       case "partially_paid":
-        return <Badge variant="secondary">Частично оплачен</Badge>;
+        return <Badge variant="secondary">{t("orders.partiallyPaid")}</Badge>;
       case "not_paid":
-        return <Badge variant="destructive">Не оплачен</Badge>;
+        return <Badge variant="destructive">{t("orders.unpaid")}</Badge>;
       default:
         return <Badge>{status}</Badge>;
     }
@@ -215,13 +217,13 @@ export default function OrderDetail() {
   const getDeliveryStatusBadge = (status: string) => {
     switch (status) {
       case "processing":
-        return <Badge variant="outline">Принят</Badge>;
+        return <Badge variant="outline">{t("orders.accepted")}</Badge>;
       case "confirmed":
-        return <Badge variant="outline">Подтвержден</Badge>;
+        return <Badge variant="outline">{t("orders.confirmed")}</Badge>;
       case "transit":
-        return <Badge variant="secondary">В пути</Badge>;
+        return <Badge variant="secondary">{t("orders.inTransit")}</Badge>;
       case "delivered":
-        return <Badge variant="default">Доставлен</Badge>;
+        return <Badge variant="default">{t("orders.delivered")}</Badge>;
       default:
         return <Badge>{status}</Badge>;
     }
@@ -239,7 +241,7 @@ export default function OrderDetail() {
   if (!order) {
     return (
       <div className="container mx-auto p-6">
-        <p>Заказ не найден</p>
+        <p>{t("orderDetail.notFound")}</p>
       </div>
     );
   }
@@ -278,14 +280,14 @@ export default function OrderDetail() {
         data-testid="button-back-order"
       >
         <ArrowLeft className="mr-2 h-4 w-4" />
-        Назад
+        {t("orderDetail.back")}
       </Button>
 
       <Card>
         <CardHeader>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <CardTitle>Заказ #{order.orderNumber}</CardTitle>
+              <CardTitle>{t("orderDetail.title")} #{order.orderNumber}</CardTitle>
               <div className="text-sm text-muted-foreground mt-1">
                 {new Date(order.createdAt!).toLocaleDateString("ru-RU", {
                   year: "numeric",
@@ -309,11 +311,11 @@ export default function OrderDetail() {
                     data-testid="button-download-invoice"
                   >
                     <Download className="mr-2 h-4 w-4" />
-                    Накладная PDF
+                    {t("orderDetail.invoicePdf")}
                   </Button>
                   {!pdfAllowed && (
                     <p className="text-xs text-muted-foreground">
-                      Доступно после подтверждения заказа
+                      {t("orderDetail.invoiceAvailableAfter")}
                     </p>
                   )}
                 </div>
@@ -324,14 +326,14 @@ export default function OrderDetail() {
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <h3 className="font-semibold mb-2">Информация о клиенте</h3>
+              <h3 className="font-semibold mb-2">{t("orderDetail.clientInfo")}</h3>
               <p className="text-sm text-muted-foreground">{order.customerName}</p>
             </div>
             <div>
-              <h3 className="font-semibold mb-2">Статус</h3>
+              <h3 className="font-semibold mb-2">{t("orderDetail.status")}</h3>
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm">Оплата:</span>
+                  <span className="text-sm">{t("orderDetail.payment")}</span>
                   {isAdmin ? (
                     <Select
                       value={order.paymentStatus}
@@ -341,9 +343,9 @@ export default function OrderDetail() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="not_paid">Не оплачен</SelectItem>
-                        <SelectItem value="partially_paid">Частично оплачен</SelectItem>
-                        <SelectItem value="paid">Оплачен</SelectItem>
+                        <SelectItem value="not_paid">{t("orders.unpaid")}</SelectItem>
+                        <SelectItem value="partially_paid">{t("orders.partiallyPaid")}</SelectItem>
+                        <SelectItem value="paid">{t("orders.paid")}</SelectItem>
                       </SelectContent>
                     </Select>
                   ) : (
@@ -351,7 +353,7 @@ export default function OrderDetail() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm">Доставка:</span>
+                  <span className="text-sm">{t("orderDetail.delivery")}</span>
                   {isAdmin ? (
                     <Select
                       value={order.deliveryStatus}
@@ -361,10 +363,10 @@ export default function OrderDetail() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="processing">Принят</SelectItem>
-                        <SelectItem value="confirmed">Подтвержден</SelectItem>
-                        <SelectItem value="transit">В пути</SelectItem>
-                        <SelectItem value="delivered">Доставлен</SelectItem>
+                        <SelectItem value="processing">{t("orders.accepted")}</SelectItem>
+                        <SelectItem value="confirmed">{t("orders.confirmed")}</SelectItem>
+                        <SelectItem value="transit">{t("orders.inTransit")}</SelectItem>
+                        <SelectItem value="delivered">{t("orders.delivered")}</SelectItem>
                       </SelectContent>
                     </Select>
                   ) : (
@@ -376,7 +378,7 @@ export default function OrderDetail() {
           </div>
 
           <div>
-            <h3 className="font-semibold mb-2">Дата доставки</h3>
+            <h3 className="font-semibold mb-2">{t("orderDetail.deliveryDate")}</h3>
             {isAdmin ? (
               <div>
                 <div className="flex items-center gap-2">
@@ -393,12 +395,12 @@ export default function OrderDetail() {
                     onClick={() => updateDeliveryDateMutation.mutate(deliveryDate)}
                     disabled={!deliveryDate || updateDeliveryDateMutation.isPending}
                   >
-                    Сохранить
+                    {t("orderDetail.save")}
                   </Button>
                 </div>
                 {order.deliveryDate && (
                   <p className="text-sm text-muted-foreground mt-2">
-                    Текущая дата: {new Date(order.deliveryDate).toLocaleDateString("ru-RU")}
+                    {t("orderDetail.currentDate")} {new Date(order.deliveryDate).toLocaleDateString("ru-RU")}
                   </p>
                 )}
               </div>
@@ -410,14 +412,14 @@ export default function OrderDetail() {
                       month: "long",
                       day: "numeric",
                     })
-                  : "Не установлена"}
+                  : t("orderDetail.notSet")}
               </p>
             )}
           </div>
 
           <div>
             <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold">Товары в заказе</h3>
+              <h3 className="font-semibold">{t("orderDetail.orderItems")}</h3>
               {isAdmin && !isEditingItems && order && (
                 <Button 
                   variant="outline" 
@@ -428,7 +430,7 @@ export default function OrderDetail() {
                   }}
                   data-testid="button-edit-items"
                 >
-                  Редактировать
+                  {t("orderDetail.edit")}
                 </Button>
               )}
             </div>
@@ -445,7 +447,7 @@ export default function OrderDetail() {
                           <p className="text-sm font-medium mt-1">{item.name || products?.find((p: any) => p.id === item.productId)?.name || 'Unknown'}</p>
                         </div>
                         <div className="w-20">
-                          <Label className="text-xs">Кол-во</Label>
+                          <Label className="text-xs">{t("orderDetail.qty")}</Label>
                           <Input 
                             type="number"
                             value={item.quantity}
@@ -545,14 +547,14 @@ export default function OrderDetail() {
                     }}
                     data-testid="button-cancel-edit"
                   >
-                    Отмена
+                    {t("common.cancel")}
                   </Button>
-                  <Button 
+                  <Button
                     onClick={() => updateOrderItemsMutation.mutate(editableItems)}
                     disabled={updateOrderItemsMutation.isPending}
                     data-testid="button-save-items"
                   >
-                    Сохранить
+                    {t("orderDetail.save")}
                   </Button>
                 </div>
               </div>

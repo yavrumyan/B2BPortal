@@ -6,6 +6,7 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/contexts/LanguageContext";
 import logoPath from "@assets/logo.png";
 
 interface HeaderProps {
@@ -22,6 +23,7 @@ export default function Header({
   const { customer, isAuthenticated, isAdmin } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { lang, setLang, t } = useLanguage();
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
@@ -30,15 +32,15 @@ export default function Header({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       toast({
-        title: "Выход выполнен",
-        description: "Вы успешно вышли из системы",
+        title: t("header.logoutDone"),
+        description: t("header.logoutDoneDesc"),
       });
       setLocation("/");
     },
     onError: () => {
       toast({
-        title: "Ошибка",
-        description: "Не удалось выйти из системы",
+        title: t("header.error"),
+        description: t("header.logoutError"),
         variant: "destructive",
       });
     },
@@ -63,6 +65,32 @@ export default function Header({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Language Switcher */}
+            <div className="flex items-center border rounded-md overflow-hidden text-xs h-8">
+              <button
+                onClick={() => setLang("ru")}
+                className={`px-2 h-full transition-colors ${
+                  lang === "ru"
+                    ? "bg-primary text-primary-foreground font-semibold"
+                    : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                }`}
+                data-testid="button-lang-ru"
+              >
+                RU
+              </button>
+              <button
+                onClick={() => setLang("en")}
+                className={`px-2 h-full transition-colors ${
+                  lang === "en"
+                    ? "bg-primary text-primary-foreground font-semibold"
+                    : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                }`}
+                data-testid="button-lang-en"
+              >
+                EN
+              </button>
+            </div>
+
             {isAuthenticated && customer ? (
               <>
                 {isAdmin && (
@@ -91,7 +119,7 @@ export default function Header({
                   data-testid="button-logout"
                 >
                   <LogOut className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Выход</span>
+                  <span className="hidden sm:inline">{t("header.logout")}</span>
                 </Button>
               </>
             ) : (
@@ -102,7 +130,7 @@ export default function Header({
                 data-testid="button-login"
               >
                 <User className="h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">Вход</span>
+                <span className="hidden sm:inline">{t("header.login")}</span>
               </Button>
             )}
 

@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Check, X, Save, ChevronDown, Trash2, Download } from "lucide-react";
 import { useState } from "react";
 import { CUSTOMER_TYPES, getCustomerTypeLabel } from "@shared/utils";
+import { useLanguage } from "@/contexts/LanguageContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,6 +40,7 @@ export default function RegistrationList({
   onUpdate,
   onDelete,
 }: RegistrationListProps) {
+  const { t } = useLanguage();
   const [editedFields, setEditedFields] = useState<Record<string, Partial<BusinessRegistration>>>({});
   const [expandedCustomers, setExpandedCustomers] = useState<Record<string, boolean>>({});
   const [searchTerm, setSearchTerm] = useState("");
@@ -107,13 +109,13 @@ export default function RegistrationList({
       <AlertDialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Удалить клиента?</AlertDialogTitle>
+            <AlertDialogTitle>{t("regList.deleteClient")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Это действие невозможно отменить. Все данные клиента и его заказы будут удалены.
+              {t("regList.deleteWarning")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete">Отмена</AlertDialogCancel>
+            <AlertDialogCancel data-testid="button-cancel-delete">{t("regList.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 if (deleteConfirmId) {
@@ -124,7 +126,7 @@ export default function RegistrationList({
               className="bg-destructive hover:bg-destructive/90"
               data-testid="button-confirm-delete"
             >
-              Удалить
+              {t("regList.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -132,7 +134,7 @@ export default function RegistrationList({
 
       <div>
         <Input
-          placeholder="Поиск по названию компании, ИНН или email..."
+          placeholder={t("regList.searchPlaceholder")}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="mb-4"
@@ -141,7 +143,7 @@ export default function RegistrationList({
       </div>
       {filteredRegistrations.length === 0 ? (
         <div className="text-center text-muted-foreground py-8">
-          {searchTerm ? "Клиенты не найдены" : "Нет клиентов"}
+          {searchTerm ? t("regList.noClientsFound") : t("regList.noClients")}
         </div>
       ) : (
         filteredRegistrations.map((registration) => {
@@ -179,7 +181,7 @@ export default function RegistrationList({
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 space-y-3">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm text-muted-foreground w-32">Компания:</span>
+                          <span className="text-sm text-muted-foreground w-32">{t("regList.company")}</span>
                           <Input
                             value={getEditedValue(registration.id, "companyName", registration.companyName)}
                             onChange={(e) => handleFieldChange(registration.id, "companyName", e.target.value)}
@@ -189,7 +191,7 @@ export default function RegistrationList({
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <span className="text-sm text-muted-foreground w-32">ИНН:</span>
+                          <span className="text-sm text-muted-foreground w-32">{t("regList.taxId")}</span>
                           <Input
                             value={getEditedValue(registration.id, "taxId", registration.taxId)}
                             onChange={(e) => handleFieldChange(registration.id, "taxId", e.target.value)}
@@ -380,7 +382,7 @@ export default function RegistrationList({
                           data-testid={`button-delete-customer-${registration.id}`}
                         >
                           <Trash2 className="h-4 w-4 mr-1" />
-                          Удалить
+                          {t("regList.delete")}
                         </Button>
                       </div>
                     </div>

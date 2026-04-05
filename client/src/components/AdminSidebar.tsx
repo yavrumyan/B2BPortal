@@ -1,6 +1,7 @@
 import { Package, Users, ShoppingBag, Mail, Settings, X, BarChart2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useLanguage } from "@/contexts/LanguageContext";
 import logoPath from "@assets/logo.png";
 
 interface AdminSidebarProps {
@@ -22,38 +23,39 @@ export default function AdminSidebar({
   isOpen = false,
   onClose,
 }: AdminSidebarProps) {
+  const { t } = useLanguage();
   const sections = [
     {
       id: "dashboard" as const,
-      label: "Дашборд",
+      label: t("admin.sidebar.dashboard"),
       icon: BarChart2,
     },
     {
       id: "products" as const,
-      label: "Товары",
+      label: t("admin.sidebar.products"),
       icon: Package,
     },
     {
       id: "registrations" as const,
-      label: "Клиенты",
+      label: t("admin.sidebar.clients"),
       icon: Users,
       badge: pendingRegistrationsCount,
     },
     {
       id: "orders" as const,
-      label: "Заказы",
+      label: t("admin.sidebar.orders"),
       icon: ShoppingBag,
       badge: unseenOrdersCount,
     },
     {
       id: "inquiries" as const,
-      label: "Запросы",
+      label: t("admin.sidebar.inquiries"),
       icon: Mail,
       badge: pendingInquiriesCount,
     },
     {
       id: "settings" as const,
-      label: "Настройки",
+      label: t("admin.sidebar.settings"),
       icon: Settings,
     },
   ];
