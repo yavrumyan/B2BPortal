@@ -243,3 +243,17 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
 });
 
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+
+// Push notification subscriptions
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: varchar("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  endpoint: text("endpoint").notNull(),
+  p256dhKey: text("p256dh_key").notNull(),
+  authKey: text("auth_key").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("push_subscriptions_customer_id_idx").on(table.customerId),
+]);
+
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;

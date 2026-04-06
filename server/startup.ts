@@ -280,6 +280,18 @@ async function createTablesManually() {
     );
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      customer_id VARCHAR NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+      endpoint TEXT NOT NULL,
+      p256dh_key TEXT NOT NULL,
+      auth_key TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS push_subscriptions_customer_id_idx ON push_subscriptions(customer_id);`);
+
   // Note: the "sessions" table is created automatically by connect-pg-simple
   // (see auth.ts: createTableIfMissing: true). Do not create it here.
 

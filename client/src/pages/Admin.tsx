@@ -7,6 +7,7 @@ import ProductForm from "@/components/ProductForm";
 import RegistrationList from "@/components/RegistrationList";
 import ProductListTable from "@/components/ProductListTable";
 import SettingsPanel from "@/components/SettingsPanel";
+import MarketingPanel from "@/components/MarketingPanel";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
@@ -46,12 +47,12 @@ import {
 export default function Admin() {
   const [location] = useLocation();
   const [activeSection, setActiveSection] = useState<
-    "dashboard" | "products" | "registrations" | "orders" | "inquiries" | "settings"
+    "dashboard" | "products" | "registrations" | "orders" | "inquiries" | "marketing" | "settings"
   >(() => {
     // Parse section from URL query parameter
     const params = new URLSearchParams(window.location.search);
     const section = params.get("section");
-    if (section === "dashboard" || section === "products" || section === "registrations" || section === "orders" || section === "inquiries" || section === "settings") {
+    if (section === "dashboard" || section === "products" || section === "registrations" || section === "orders" || section === "inquiries" || section === "marketing" || section === "settings") {
       return section;
     }
     return "dashboard";
@@ -68,7 +69,7 @@ export default function Admin() {
   const { play: playNotificationSound } = useNotificationSound();
   const prevCountsRef = useRef({ orders: 0, inquiries: 0 });
 
-  const handleSectionChange = (section: "dashboard" | "products" | "registrations" | "orders" | "inquiries" | "settings") => {
+  const handleSectionChange = (section: "dashboard" | "products" | "registrations" | "orders" | "inquiries" | "marketing" | "settings") => {
     setActiveSection(section);
     setLocation(`/admin?section=${section}`);
     // Invalidate queries when switching sections to ensure fresh data
@@ -440,6 +441,7 @@ export default function Admin() {
             {activeSection === "registrations" && t("admin.sidebar.clients")}
             {activeSection === "orders" && t("admin.sidebar.orders")}
             {activeSection === "inquiries" && t("admin.sidebar.inquiries")}
+            {activeSection === "marketing" && t("admin.sidebar.marketing")}
             {activeSection === "settings" && t("admin.sidebar.settings")}
           </h1>
         </header>
@@ -870,6 +872,10 @@ export default function Admin() {
                 </div>
               )}
             </div>
+          )}
+
+          {activeSection === "marketing" && (
+            <MarketingPanel />
           )}
 
           {activeSection === "settings" && (

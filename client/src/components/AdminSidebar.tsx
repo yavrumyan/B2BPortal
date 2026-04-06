@@ -1,12 +1,12 @@
-import { Package, Users, ShoppingBag, Mail, Settings, X, BarChart2 } from "lucide-react";
+import { Package, Users, ShoppingBag, Mail, Settings, X, BarChart2, Megaphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/contexts/LanguageContext";
 import logoPath from "@assets/logo.png";
 
 interface AdminSidebarProps {
-  activeSection?: "dashboard" | "products" | "registrations" | "orders" | "inquiries" | "settings";
-  onSectionChange?: (section: "dashboard" | "products" | "registrations" | "orders" | "inquiries" | "settings") => void;
+  activeSection?: "dashboard" | "products" | "registrations" | "orders" | "inquiries" | "marketing" | "settings";
+  onSectionChange?: (section: "dashboard" | "products" | "registrations" | "orders" | "inquiries" | "marketing" | "settings") => void;
   pendingRegistrationsCount?: number;
   pendingInquiriesCount?: number;
   unseenOrdersCount?: number;
@@ -52,6 +52,11 @@ export default function AdminSidebar({
       label: t("admin.sidebar.inquiries"),
       icon: Mail,
       badge: pendingInquiriesCount,
+    },
+    {
+      id: "marketing" as const,
+      label: t("admin.sidebar.marketing"),
+      icon: Megaphone,
     },
     {
       id: "settings" as const,

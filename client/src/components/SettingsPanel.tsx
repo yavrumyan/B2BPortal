@@ -1,40 +1,23 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Settings } from "@shared/schema";
-import { Trash2, Upload, ExternalLink } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
-
-interface Banner {
-  id: string;
-  imageUrl: string;
-  redirectUrl: string | null;
-  active: boolean;
-  sortOrder: number;
-}
 
 export default function SettingsPanel() {
   const { t } = useLanguage();
   const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     corporateMarkupPercentage: 10,
     governmentMarkupPercentage: 10,
   });
-  const [newBannerUrl, setNewBannerUrl] = useState("");
-  const [uploadingBanner, setUploadingBanner] = useState(false);
 
   const { data: settings, isLoading } = useQuery<Settings>({
     queryKey: ["/api/settings"],
-  });
-
-  const { data: banners = [], isLoading: bannersLoading } = useQuery<Banner[]>({
-    queryKey: ["/api/admin/banners"],
   });
 
   useEffect(() => {
@@ -60,37 +43,6 @@ export default function SettingsPanel() {
     },
   });
 
-  const deleteBannerMutation = useMutation({
-    mutationFn: async (id: string) => apiRequest("DELETE", `/api/admin/banners/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/banners"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/banners"] });
-      toast({ title: t("settings.bannerDeleted") });
-    },
-    onError: () => toast({ title: t("common.error"), description: t("settings.bannerDeleteError"), variant: "destructive" }),
-  });
-
-  const toggleBannerMutation = useMutation({
-    mutationFn: async ({ id, active }: { id: string; active: boolean }) =>
-      apiRequest("PATCH", `/api/admin/banners/${id}`, { active }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/banners"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/banners"] });
-    },
-    onError: () => toast({ title: t("common.error"), description: t("settings.bannerUpdateError"), variant: "destructive" }),
-  });
-
-  const updateRedirectMutation = useMutation({
-    mutationFn: async ({ id, redirectUrl }: { id: string; redirectUrl: string }) =>
-      apiRequest("PATCH", `/api/admin/banners/${id}`, { redirectUrl }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/banners"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/banners"] });
-      toast({ title: t("settings.linkSaved") });
-    },
-    onError: () => toast({ title: t("common.error"), description: t("settings.linkSaveError"), variant: "destructive" }),
-  });
-
   const handleSaveMarkups = () => {
     if (formData.corporateMarkupPercentage < 0 || formData.corporateMarkupPercentage > 100) {
       toast({ title: t("common.error"), description: t("settings.corpMarkupError"), variant: "destructive" });
@@ -101,25 +53,6 @@ export default function SettingsPanel() {
       return;
     }
     updateSettingsMutation.mutate(formData);
-  };
-
-  const handleUploadBanner = async (file: File) => {
-    setUploadingBanner(true);
-    try {
-      const form = new FormData();
-      form.append("image", file);
-      if (newBannerUrl.trim()) form.append("redirectUrl", newBannerUrl.trim());
-      const res = await fetch("/api/admin/banners", { method: "POST", body: form });
-      if (!res.ok) throw new Error((await res.json()).message || "Upload failed");
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/banners"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/banners"] });
-      setNewBannerUrl("");
-      toast({ title: t("settings.bannerAdded") });
-    } catch (e: any) {
-      toast({ title: t("common.error"), description: e.message, variant: "destructive" });
-    } finally {
-      setUploadingBanner(false);
-    }
   };
 
   if (isLoading) return <div className="text-muted-foreground">{t("settings.loading")}</div>;
@@ -171,130 +104,6 @@ export default function SettingsPanel() {
           </Button>
         </CardContent>
       </Card>
-
-      {/* ── Banner management ── */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("settings.banners")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <p className="text-sm text-muted-foreground">
-            {t("settings.bannersDesc")}
-          </p>
-
-          {/* Upload new banner */}
-          <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
-            <p className="text-sm font-medium">{t("settings.addBanner")}</p>
-            <Input
-              placeholder={t("settings.bannerLink")}
-              value={newBannerUrl}
-              onChange={(e) => setNewBannerUrl(e.target.value)}
-            />
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleUploadBanner(file);
-                e.target.value = "";
-              }}
-            />
-            <Button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploadingBanner}
-              className="w-full"
-              variant="outline"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              {uploadingBanner ? t("settings.uploading") : t("settings.uploadImage")}
-            </Button>
-          </div>
-
-          {/* Existing banners list */}
-          {bannersLoading ? (
-            <p className="text-sm text-muted-foreground">{t("settings.uploading")}</p>
-          ) : banners.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("settings.noBanners")}</p>
-          ) : (
-            <div className="space-y-3">
-              {banners.map((banner) => (
-                <BannerRow
-                  key={banner.id}
-                  banner={banner}
-                  onToggle={(active) => toggleBannerMutation.mutate({ id: banner.id, active })}
-                  onSaveUrl={(url) => updateRedirectMutation.mutate({ id: banner.id, redirectUrl: url })}
-                  onDelete={() => deleteBannerMutation.mutate(banner.id)}
-                />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function BannerRow({
-  banner,
-  onToggle,
-  onSaveUrl,
-  onDelete,
-}: {
-  banner: Banner;
-  onToggle: (active: boolean) => void;
-  onSaveUrl: (url: string) => void;
-  onDelete: () => void;
-}) {
-  const { t } = useLanguage();
-  const [url, setUrl] = useState(banner.redirectUrl || "");
-
-  return (
-    <div className="flex gap-3 items-start border rounded-lg p-3 bg-background">
-      {/* Thumbnail */}
-      <a href={banner.imageUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
-        <img
-          src={banner.imageUrl}
-          alt={t("settings.bannerOrder")}
-          className="h-16 w-24 object-cover rounded border hover:opacity-80 transition-opacity"
-        />
-      </a>
-
-      {/* Controls */}
-      <div className="flex-1 min-w-0 space-y-2">
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder={t("settings.bannerClickUrl")}
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            className="text-xs h-8"
-          />
-          <Button size="sm" variant="outline" className="h-8 shrink-0" onClick={() => onSaveUrl(url)}>
-            <ExternalLink className="h-3 w-3 mr-1" /> {t("settings.save")}
-          </Button>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Switch
-              checked={banner.active}
-              onCheckedChange={onToggle}
-              id={`active-${banner.id}`}
-            />
-            <label htmlFor={`active-${banner.id}`} className="text-xs cursor-pointer">
-              {banner.active ? t("settings.active") : t("settings.hidden")}
-            </label>
-          </div>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 text-destructive hover:text-destructive hover:bg-destructive/10 ml-auto"
-            onClick={onDelete}
-          >
-            <Trash2 className="h-3 w-3 mr-1" /> {t("settings.delete")}
-          </Button>
-        </div>
-      </div>
     </div>
   );
 }

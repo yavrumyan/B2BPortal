@@ -1,4 +1,4 @@
-import { ShoppingCart, User, LogOut, Settings, Menu } from "lucide-react";
+import { ShoppingCart, User, LogOut, Settings, Menu, Bell, BellOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
@@ -7,6 +7,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import logoPath from "@assets/logo.png";
 
 interface HeaderProps {
@@ -24,6 +25,7 @@ export default function Header({
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { lang, setLang, t } = useLanguage();
+  const { isSupported: pushSupported, isSubscribed: pushSubscribed, isLoading: pushLoading, permission: pushPermission, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotifications();
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
@@ -110,6 +112,22 @@ export default function Header({
                     <User className="h-4 w-4" />
                     <span className="hidden sm:inline">{customer.companyName}</span>
                   </div>
+                )}
+                {pushSupported && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={pushSubscribed ? pushUnsubscribe : pushSubscribe}
+                    disabled={pushLoading || pushPermission === "denied"}
+                    title={pushPermission === "denied" ? t("push.denied") : pushSubscribed ? t("push.disable") : t("push.enable")}
+                    data-testid="button-push-toggle"
+                  >
+                    {pushSubscribed ? (
+                      <Bell className="h-4 w-4" />
+                    ) : (
+                      <BellOff className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </Button>
                 )}
                 <Button
                   variant="ghost"

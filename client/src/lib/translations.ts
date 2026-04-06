@@ -422,6 +422,31 @@ export const translations: Translations = {
   "csv.noData": { ru: "CSV файл не содержит данных о товарах", en: "CSV file contains no product data" },
   "csv.readError": { ru: "Ошибка при чтении файла", en: "Error reading file" },
 
+  // Push Notifications
+  "push.enable": { ru: "Включить уведомления", en: "Enable notifications" },
+  "push.disable": { ru: "Отключить уведомления", en: "Disable notifications" },
+  "push.denied": { ru: "Уведомления заблокированы в браузере", en: "Notifications blocked in browser" },
+  "push.unsupported": { ru: "Браузер не поддерживает уведомления", en: "Browser does not support notifications" },
+  "push.broadcastTitle": { ru: "Push-уведомления", en: "Push Notifications" },
+  "push.broadcastDesc": { ru: "Отправить уведомление всем подписанным клиентам", en: "Send a notification to all subscribed customers" },
+  "push.messageTitle": { ru: "Заголовок", en: "Title" },
+  "push.messageTitlePlaceholder": { ru: "Например: Скидки на мониторы!", en: "E.g.: Monitor sale!" },
+  "push.messageBody": { ru: "Текст сообщения", en: "Message text" },
+  "push.messageBodyPlaceholder": { ru: "Текст уведомления для клиентов", en: "Notification text for customers" },
+  "push.messageUrl": { ru: "Ссылка при клике (необязательно)", en: "Click URL (optional)" },
+  "push.messageUrlPlaceholder": { ru: "https://b2b.chip.am/?cart=...", en: "https://b2b.chip.am/?cart=..." },
+  "push.messageImage": { ru: "Изображение (необязательно)", en: "Image (optional)" },
+  "push.send": { ru: "Отправить уведомление", en: "Send notification" },
+  "push.sending": { ru: "Отправка...", en: "Sending..." },
+  "push.sent": { ru: "Уведомление отправлено", en: "Notification sent" },
+  "push.sentDesc": { ru: "Уведомление отправлено подписанным клиентам", en: "Notification sent to subscribed customers" },
+  "push.sendError": { ru: "Не удалось отправить уведомление", en: "Failed to send notification" },
+  "push.subscriberCount": { ru: "Подписчиков", en: "Subscribers" },
+  "push.notConfigured": { ru: "Push-уведомления не настроены на сервере", en: "Push notifications not configured on server" },
+
+  // Admin Sidebar — Marketing
+  "admin.sidebar.marketing": { ru: "Маркетинг", en: "Marketing" },
+
   // Common
   "common.error": { ru: "Ошибка", en: "Error" },
   "common.success": { ru: "Успешно", en: "Success" },

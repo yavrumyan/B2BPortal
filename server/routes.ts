@@ -22,6 +22,16 @@ import {
 import { eq, desc, and, lt, ne, gte, sql } from "drizzle-orm";
 import { db } from "./db";
 import {
+  getVapidPublicKey,
+  saveSubscription,
+  removeSubscription,
+  sendPushToCustomer,
+  sendPushToAdmins,
+  sendPushToAllCustomers,
+  getSubscriberCount,
+  isPushEnabled,
+} from "./pushNotifications";
+import {
   sendRegistrationApprovedEmail,
   sendRegistrationRejectedEmail,
   sendAdminNewRegistrationEmail,
@@ -288,8 +298,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const { password: _, ...customerWithoutPassword } = customer;
-      // Fire-and-forget email notifications
+      // Fire-and-forget email + push notifications
       sendAdminNewRegistrationEmail(customer).catch(e => console.error('[EMAIL]', e));
+      sendPushToAdmins({
+        title: "Новая регистрация",
+        body: `Новый клиент: ${customer.companyName}`,
+        url: "/admin?section=registrations",
+        tag: `new-reg-${customer.id}`,
+      }).catch(e => console.error('[PUSH]', e));
       res.json(customerWithoutPassword);
     } catch (error: any) {
       console.error("Registration error:", error);
@@ -490,11 +506,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create the order
       const order = await storage.createOrder(validatedData);
 
-      // Fire-and-forget order confirmation emails
+      // Fire-and-forget order confirmation emails + push
       Promise.all([
         sendOrderConfirmationEmail(orderingCustomer, order),
         sendAdminNewOrderEmail(orderingCustomer, order),
       ]).catch(e => console.error('[EMAIL]', e));
+      sendPushToAdmins({
+        title: "Новый заказ",
+        body: `Заказ ${order.orderNumber} от ${orderingCustomer.companyName}`,
+        url: "/admin?section=orders",
+        tag: `new-order-${order.id}`,
+      }).catch(e => console.error('[PUSH]', e));
 
       // Deduct quantities from product stock (only for catalog products, not offer items)
       // Also update inquiry status for offer items
@@ -580,6 +602,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const customer = await storage.getCustomerById(order.customerId);
         if (customer) {
           sendOrderStatusChangedEmail(customer, order, 'payment').catch(e => console.error('[EMAIL]', e));
+          sendPushToCustomer(order.customerId, {
+            title: "Статус оплаты обновлён",
+            body: `Заказ ${order.orderNumber}: статус оплаты изменён`,
+            url: `/`,
+            tag: `order-status-${order.id}`,
+          }).catch(e => console.error('[PUSH]', e));
         }
       }
 
@@ -600,6 +628,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const customer = await storage.getCustomerById(order.customerId);
         if (customer) {
           sendOrderStatusChangedEmail(customer, order, 'delivery').catch(e => console.error('[EMAIL]', e));
+          sendPushToCustomer(order.customerId, {
+            title: "Статус доставки обновлён",
+            body: `Заказ ${order.orderNumber}: статус доставки изменён`,
+            url: `/`,
+            tag: `order-status-${order.id}`,
+          }).catch(e => console.error('[PUSH]', e));
         }
       }
 
@@ -878,7 +912,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Notify admin about new inquiry (fire-and-forget)
       storage.getCustomerById(req.session.customerId!).then(cust => {
-        if (cust) sendAdminNewInquiryEmail(cust).catch(e => console.error('[EMAIL]', e));
+        if (cust) {
+          sendAdminNewInquiryEmail(cust).catch(e => console.error('[EMAIL]', e));
+          sendPushToAdmins({
+            title: "Новый запрос",
+            body: `Запрос от ${cust.companyName}`,
+            url: "/admin?section=inquiries",
+            tag: `new-inquiry-${inquiry.id}`,
+          }).catch(e => console.error('[PUSH]', e));
+        }
       }).catch(e => console.error('[EMAIL] inquiry notify:', e));
 
       res.json(inquiry);
@@ -965,6 +1007,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const inquiryCustomer = await storage.getCustomerById(inquiry.customerId);
         if (inquiryCustomer) {
           sendNewOfferEmail(inquiryCustomer, req.body.inquiryId).catch(e => console.error('[EMAIL]', e));
+          sendPushToCustomer(inquiry.customerId, {
+            title: "Новое предложение",
+            body: "Получено предложение по вашему запросу",
+            url: "/",
+            tag: `offer-${offer.id}`,
+          }).catch(e => console.error('[PUSH]', e));
         }
       }
 
@@ -1219,6 +1267,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sendAdminNewCommentEmail(customer, order, message.trim()).catch(err =>
           console.error("[EMAIL] Failed to send admin comment notification:", err)
         );
+        sendPushToAdmins({
+          title: "Новый комментарий",
+          body: `${customer.companyName} к заказу ${order.orderNumber}`,
+          url: `/admin?section=orders`,
+          tag: `comment-${order.id}`,
+        }).catch(e => console.error('[PUSH]', e));
       } else if (!internal) {
         // Admin posted a non-internal comment → notify the order's customer
         const orderCustomer = await storage.getCustomerById(order.customerId);
@@ -1226,6 +1280,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           sendCustomerNewCommentEmail(orderCustomer, order, message.trim()).catch(err =>
             console.error("[EMAIL] Failed to send customer comment notification:", err)
           );
+          sendPushToCustomer(order.customerId, {
+            title: "Новый комментарий",
+            body: `Комментарий к заказу ${order.orderNumber}`,
+            url: `/`,
+            tag: `comment-${order.id}`,
+          }).catch(e => console.error('[PUSH]', e));
         }
       }
 
@@ -1454,6 +1514,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to delete banner" });
     }
   });
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // ─── Push Notification Endpoints ────────────────────────────────────────────
+
+  app.get("/api/push/vapid-key", async (_req, res) => {
+    const publicKey = getVapidPublicKey();
+    const subscriberCount = publicKey ? await getSubscriberCount() : 0;
+    res.json({ publicKey, subscriberCount });
+  });
+
+  app.post("/api/push/subscribe", isAuthenticated, async (req, res) => {
+    try {
+      const { endpoint, keys } = req.body;
+      if (!endpoint || !keys?.p256dh || !keys?.auth) {
+        return res.status(400).json({ message: "Invalid subscription data" });
+      }
+      await saveSubscription(req.session.customerId!, { endpoint, keys });
+      res.json({ message: "Subscribed" });
+    } catch (error) {
+      console.error("Push subscribe error:", error);
+      res.status(500).json({ message: "Failed to subscribe" });
+    }
+  });
+
+  app.delete("/api/push/subscribe", isAuthenticated, async (req, res) => {
+    try {
+      const { endpoint } = req.body;
+      if (!endpoint) {
+        return res.status(400).json({ message: "Endpoint required" });
+      }
+      await removeSubscription(req.session.customerId!, endpoint);
+      res.json({ message: "Unsubscribed" });
+    } catch (error) {
+      console.error("Push unsubscribe error:", error);
+      res.status(500).json({ message: "Failed to unsubscribe" });
+    }
+  });
+
+  app.post("/api/admin/push/broadcast", isAdmin, async (req, res) => {
+    try {
+      const { title, body, url, image } = req.body;
+      if (!title || !body) {
+        return res.status(400).json({ message: "Title and body are required" });
+      }
+      await sendPushToAllCustomers({ title, body, url, image, tag: `broadcast-${Date.now()}` });
+      res.json({ message: "Broadcast sent" });
+    } catch (error) {
+      console.error("Push broadcast error:", error);
+      res.status(500).json({ message: "Failed to send broadcast" });
+    }
+  });
+
   // ──────────────────────────────────────────────────────────────────────────
 
   const httpServer = createServer(app);

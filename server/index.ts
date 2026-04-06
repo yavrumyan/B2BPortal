@@ -4,6 +4,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { setupSession } from "./auth";
 import { runStartupTasks } from "./startup";
+import { initWebPush } from "./pushNotifications";
 
 // ── Diagnostic: catch startup crashes and expose via HTTP ──────────────────
 let _crashHandled = false;
@@ -80,6 +81,7 @@ app.use((req, res, next) => {
 
 (async () => {
   await runStartupTasks();
+  initWebPush();
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
